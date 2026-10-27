@@ -45,6 +45,39 @@ textarea {
   flex-shrink: 0;
 }
 
+.table-center { top: 52%; }
+.table-center-draw { top: 60%; }
+
+.round-result {
+  display: flex;
+  height: 96px;
+  flex-shrink: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid;
+  border-radius: 16px;
+  padding: 10px 12px;
+}
+
+.round-result-compact { height: 84px; padding: 8px 10px; }
+.round-result-win {
+  color: #f6df9b;
+  border-color: #c8a95e;
+  background: linear-gradient(135deg, #3c3018, #1d211b);
+  box-shadow: inset 0 1px 0 #f6df9b18, 0 0 20px #c8a95e18;
+}
+.round-result-loss {
+  color: #f0bac0;
+  border-color: #86505e;
+  background: linear-gradient(135deg, #30222b, #191d28);
+}
+.round-result-draw, .round-result-mixed {
+  color: #d7e3ef;
+  border-color: #607184;
+  background: linear-gradient(135deg, #24313c, #171e28);
+}
+
 .poker-action {
   display: flex;
   height: 56px;
@@ -136,6 +169,7 @@ textarea {
 }
 
 @media (max-height: 700px) {
+  .table-center { top: 68%; }
   .table-actions {
     height: 176px;
   }

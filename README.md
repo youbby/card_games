@@ -3,13 +3,13 @@
 혼자서 플레이하는 안드로이드 카드 게임. 텍사스 홀덤·파이브 카드 드로우·바카라·블랙잭을 지원합니다.
 게임용 가상 칩만 사용하며 실제 돈과는 관련이 없습니다.
 
-v0.2.0에서 세 게임과 게임별 방 수익 한도를 추가했습니다. 규칙은 [추가 게임 문서](docs/08-additional-games.md), 변경 내역은 [CHANGELOG.md](CHANGELOG.md)를 참고하세요.
+v0.2.0에서 세 게임과 게임별 방 수익 한도를 추가했고, v0.2.1에서는 승패를 내 기준으로 명확히 표시하도록 개선했습니다. 규칙은 [추가 게임 문서](docs/08-additional-games.md), 변경 내역은 [CHANGELOG.md](CHANGELOG.md)를 참고하세요.
 
 ## 설치
 
 [GitHub Releases](https://github.com/youbby/card_games/releases)에서 최신 `card-games-버전.apk`를 내려받아 설치합니다. Android 7.0 이상을 지원합니다.
 
-기존 v0.1.0 릴리스 앱에는 APK를 덮어 설치해 업데이트할 수 있습니다. 기존 캐릭터·칩·전적을 유지하며 저장소를 자동으로 업그레이드합니다.
+기존 v0.1.0·v0.2.0 릴리스 앱에는 APK를 덮어 설치해 업데이트할 수 있습니다. 기존 캐릭터·칩·전적을 유지하며 저장소를 자동으로 업그레이드합니다.
 
 기존 디버그 APK와 릴리스 APK는 서명이 다릅니다. 디버그 앱을 삭제한 뒤 릴리스 앱을 설치해야 하며, 삭제 시 기기에 저장된 캐릭터와 전적도 지워집니다.
 
@@ -45,7 +45,7 @@ npm run android:release -- -InitializeSigning
 
 # 이후에는 같은 키로 빌드
 npm run android:release
-# 결과: release/card-games-0.2.0.apk 및 .apk.sha256
+# 결과: release/card-games-0.2.1.apk 및 .apk.sha256
 ```
 
 스크립트는 웹 빌드·Android 동기화·릴리스 빌드 후 APK 정렬, 서명, 서명 검증과 SHA-256 체크섬 생성을 수행합니다. JDK는 `JAVA_HOME`, SDK는 `ANDROID_HOME` 또는 `android/local.properties`에서 찾습니다.

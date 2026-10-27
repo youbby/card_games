@@ -15,6 +15,8 @@ import { TableRunner, type TableView } from '../services/tableRunner';
 import { Button, Chips, ClassBadge, ConfirmModal, cx, EmptyCardSlot, fmt, Modal, PlayingCard } from '../ui/components';
 import { useBackButton } from '../ui/hooks';
 import { gameName, profitTarget } from '../games/catalog';
+import { RoundResult } from '../ui/RoundResult';
+import { pokerResult } from '../ui/results';
 
 type Pos = { top: string; left: string };
 
@@ -169,7 +171,7 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
             />
           );
         })}
-        <div className={cx('absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2', session.gameId === 'draw' ? 'top-[60%]' : 'top-[52%]')}>
+        <div className={cx('table-center absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2', session.gameId === 'draw' && 'table-center-draw')}>
           <PotView hand={hand} />
           <div data-testid="community-cards" className="flex min-h-14 gap-1">
             {session.gameId === 'draw' ? <div className="flex w-44 items-center justify-center text-center text-xs text-emerald-100/60">{hand?.street === 'DRAW' ? '카드 교환 중' : result ? '쇼다운' : '비공개 카드 5장 · 교환 1회'}</div> : Array.from({ length: 5 }, (_, i) =>
@@ -186,11 +188,6 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
               ),
             )}
           </div>
-          {result && (
-            <div data-testid="hand-result" className="pointer-events-none absolute inset-x-0 top-full pt-2">
-              <ResultBanner hand={hand!} />
-            </div>
-          )}
         </div>
       </div>
 
@@ -263,19 +260,24 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
 function useFeedback(view: TableView | null, settings: Settings) {
   const lastLogId = useRef(0);
   const wasTurn = useRef(false);
+  const lastResult = useRef<HandState['result']>(null);
   useEffect(() => {
     if (!view) return;
     const fresh = view.log.filter((l) => l.id > lastLogId.current);
     lastLogId.current = view.log.at(-1)?.id ?? lastLogId.current;
     for (const l of fresh) {
       if (l.tone === 'street') playSound('card', settings.sound);
-      else if (l.tone === 'win') {
-        const mine = l.text.includes(`${view.session.seats[0]!.name} +`);
-        playSound(mine ? 'win' : 'lose', settings.sound);
-        if (mine) vibrate(settings.haptics, true);
-      } else if (l.text.endsWith('폴드')) playSound('fold', settings.sound);
+      else if (l.tone === 'win') continue;
+      else if (l.text.endsWith('폴드')) playSound('fold', settings.sound);
       else if (l.text.endsWith('체크')) playSound('check', settings.sound);
       else if (l.tone === 'action' || l.tone === 'mine') playSound('chip', settings.sound);
+    }
+    const result = view.hand?.result;
+    if (result && result !== lastResult.current) {
+      const net = result.net[view.seatOfPlayer.indexOf(0)] ?? 0;
+      playSound(net > 0 ? 'win' : net < 0 ? 'lose' : 'check', settings.sound);
+      if (net > 0) vibrate(settings.haptics, true);
+      lastResult.current = result;
     }
     if (view.humanTurn && !wasTurn.current) {
       playSound('turn', settings.sound);
@@ -292,19 +294,6 @@ function PotView({ hand }: { hand: HandState | null }) {
     <div className="rounded-full border border-yellow-500/40 bg-black/60 px-3 py-0.5 text-sm font-extrabold">
       <span className="mr-1 text-[10px] text-gray-400">POT</span>
       <span className="tabular-nums text-yellow-400">{fmt(total)}</span>
-    </div>
-  );
-}
-
-function ResultBanner({ hand }: { hand: HandState }) {
-  const r = hand.result!;
-  const top = r.pots[0];
-  const name = top.winners.map((w) => hand.players[w].name).join(', ');
-  const how = r.showdown ? r.hands[top.winners[0]]?.name : '나머지 폴드';
-  return (
-    <div className="pop-in rounded-xl bg-black/70 px-3 py-1 text-center text-xs">
-      <span className="font-extrabold text-emerald-300">{name}</span> 승리 · <span className="text-gray-300">{how}</span>
-      {r.pots.length > 1 && <span className="text-gray-500"> (+사이드팟 {r.pots.length - 1})</span>}
     </div>
   );
 }
@@ -406,7 +395,11 @@ function OpponentSeat({
         )}
       </div>
       <div className="mt-0.5 flex h-4 items-center gap-1">
-        {thinking ? (
+        {hand?.result && player ? (
+          <span className={cx('rounded-full border px-2 text-[10px] font-extrabold', isWinner ? 'border-yellow-400/60 bg-yellow-950 text-yellow-200' : 'border-gray-600 bg-gray-950 text-gray-300')}>
+            {isWinner ? hand.result.net[index] > 0 ? '승리' : '팟 획득' : player.folded ? '폴드' : '패배'}
+          </span>
+        ) : thinking ? (
           <span className="thinking text-[10px] font-bold text-yellow-300">생각 중…</span>
         ) : label && !/^(SB|BB) /.test(label) ? (
           <span className="rounded-full bg-black/60 px-1.5 text-[10px] font-bold text-yellow-200">{label}</span>
@@ -451,7 +444,7 @@ function MySeat({
       className={cx(
         'relative flex items-center gap-3 rounded-2xl border border-yellow-500/30 bg-gray-900/90 px-3 py-2 transition',
         turn && 'glow-turn',
-        isWinner && 'glow-win',
+        isWinner && (hand?.result?.net[index] ?? 0) > 0 && 'glow-win',
         player?.folded && 'opacity-60',
       )}
     >
@@ -475,6 +468,7 @@ function MySeat({
         <div className="flex items-center gap-1.5">
           <span className="text-lg">{record.avatar}</span>
           <span className="truncate text-sm font-bold">{record.name}</span>
+          <span className="shrink-0 rounded border border-yellow-400/30 px-1 text-[9px] font-bold text-yellow-200">나</span>
         </div>
         <Chips amount={player ? player.stack : record.stack} className="text-base" />
         <div className="flex h-5 items-center gap-1.5">
@@ -552,10 +546,11 @@ function ActionArea({
   const { hand, phase, session } = view;
   const stake = stakeById(session.stakeId);
   const human = view.seatOfPlayer.indexOf(0);
+  const summary = hand ? pokerResult(hand, human) : null;
   if (phase === 'profitLimit') return (
-    <div className="space-y-3 pb-1 text-center">
-      <p className="font-bold text-yellow-300">이번 방의 수익 목표를 달성했습니다!</p>
-      <p className="text-xs text-gray-400">당첨금은 전부 정산되었습니다. 나갔다가 새 방에 입장해 주세요.</p>
+    <div className="flex h-full flex-col justify-end gap-2">
+      {summary && <RoundResult summary={summary} compact />}
+      <p className="text-center text-[11px] text-yellow-200">수익 목표 달성 · 전액 정산 후 새 방에 입장해 주세요.</p>
       <Button className="w-full" variant="primary" onClick={onLeave}>정산하고 나가기</Button>
     </div>
   );
@@ -573,15 +568,11 @@ function ActionArea({
       </div>
     );
   }
-  if (phase === 'handOver' && hand?.result) {
-    const net = human >= 0 ? hand.result.net[human] : 0;
+  if (phase === 'handOver' && summary) {
     return (
-      <div className="flex h-14 items-center gap-2">
-        <div className={cx('w-24 text-center text-lg font-extrabold tabular-nums', net > 0 ? 'text-emerald-400' : net < 0 ? 'text-red-400' : 'text-gray-400')}>
-          {net > 0 ? '+' : ''}
-          {fmt(net)}
-        </div>
-        <Button variant="primary" className="flex-1 py-3.5 text-base" onClick={onNext}>
+      <div className="flex h-full flex-col justify-end gap-2">
+        <RoundResult summary={summary} />
+        <Button variant="primary" className="h-14 w-full text-base" onClick={onNext}>
           다음 핸드
         </Button>
       </div>
