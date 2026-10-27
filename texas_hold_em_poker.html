@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Texas Hold'em Poker</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            height: 100%;
+            height: 100dvh;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: #070a0f;
+            color: #f3f4f6;
+            user-select: none;
+        }
+
+        /* Felt Table Styling */
+        .poker-table {
+            background: radial-gradient(circle at center, #1b4d2e 0%, #0d2e1a 70%, #05170d 100%);
+            border: 6px solid #2d1b0e;
+            box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.8), 0 10px 25px rgba(0, 0, 0, 0.8);
+        }
+
+        /* Playing Card Styles */
+        .card {
+            width: 44px;
+            height: 64px;
+            border-radius: 6px;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 2px 4px;
+            font-weight: 800;
+            background: #ffffff;
+            position: relative;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        @media (min-height: 700px) {
+            .card {
+                width: 52px;
+                height: 76px;
+                padding: 3px 5px;
+            }
+        }
+
+        @media (min-width: 640px) {
+            .card {
+                width: 64px;
+                height: 92px;
+                padding: 4px 6px;
+                border-radius: 8px;
+            }
+        }
+
+        .card.red { color: #dc2626; }
+        .card.black { color: #111827; }
+
+        .card-back {
+            background: repeating-linear-gradient(
+                45deg,
+                #1e3a8a,
+                #1e3a8a 6px,
+                #1d4ed8 6px,
+                #1d4ed8 12px
+            );
+            border: 2px solid #ffffff;
+        }
+
+        .glow-gold {
+            box-shadow: 0 0 15px rgba(234, 179, 8, 0.8);
+            border-color: #facc15 !important;
+        }
+
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
+        /* Safe area bottom padding for iOS/Android gesture bar */
+        .safe-pb {
+            padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+        }
+    </style>
+</head>
+<body class="flex flex-col h-full max-w-md md:max-w-4xl mx-auto px-2 py-1 justify-between">
+
+    <!-- Header (Compact) -->
+    <header class="flex justify-between items-center py-1.5 px-3 bg-gray-900/90 rounded-xl border border-gray-800 shadow-sm shrink-0">
+        <div class="flex items-center gap-1.5">
+            <i data-lucide="spade" class="text-yellow-500 w-4 h-4"></i>
+            <h1 class="text-xs sm:text-sm font-black tracking-wider text-white">TEXAS HOLD'EM</h1>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+            <div class="bg-gray-800 px-2 py-0.5 rounded border border-gray-700 text-[11px]">
+                Hand <span id="hand-count" class="font-bold text-yellow-400">1</span>
+            </div>
+            <button id="btn-reset" class="bg-red-900/40 hover:bg-red-800 text-red-300 border border-red-700/50 px-2 py-0.5 rounded text-[11px] transition flex items-center gap-1">
+                <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Reset
+            </button>
+        </div>
+    </header>
+
+    <!-- Poker Table Main View (Flexible Fill) -->
+    <main class="flex-1 my-1 flex flex-col justify-center min-h-0 relative">
+        <div class="poker-table rounded-2xl sm:rounded-3xl p-2 sm:p-4 h-full flex flex-col justify-between overflow-hidden relative">
+            
+            <!-- Phase Badge -->
+            <div class="absolute top-1.5 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur px-3 py-0.5 rounded-full border border-white/10 text-[10px] font-bold text-yellow-400 z-10">
+                <span id="phase-badge">PRE-FLOP</span>
+            </div>
+
+            <!-- AI Opponents Row -->
+            <div class="grid grid-cols-2 gap-2 w-full pt-5 shrink-0">
+                <!-- AI 1 -->
+                <div id="seat-1" class="flex flex-col items-center p-1.5 rounded-xl bg-black/40 border border-white/10 transition-all">
+                    <div class="flex items-center gap-1 mb-0.5">
+                        <span class="text-[11px] font-bold text-gray-200">AI Alex</span>
+                        <span id="dealer-1" class="hidden bg-white text-black text-[8px] font-extrabold px-1 rounded-full">D</span>
+                    </div>
+                    <div class="flex gap-1 my-0.5" id="cards-1">
+                        <div class="card card-back"></div>
+                        <div class="card card-back"></div>
+                    </div>
+                    <div class="text-[11px] text-yellow-400 font-extrabold bg-black/60 px-2 py-0.2 rounded-full border border-yellow-500/20">
+                        $<span id="chips-1">1000</span>
+                    </div>
+                    <div id="action-1" class="text-[10px] text-yellow-300 h-3 mt-0.5 font-semibold"></div>
+                </div>
+
+                <!-- AI 2 -->
+                <div id="seat-2" class="flex flex-col items-center p-1.5 rounded-xl bg-black/40 border border-white/10 transition-all">
+                    <div class="flex items-center gap-1 mb-0.5">
+                        <span class="text-[11px] font-bold text-gray-200">AI Elena</span>
+                        <span id="dealer-2" class="hidden bg-white text-black text-[8px] font-extrabold px-1 rounded-full">D</span>
+                    </div>
+                    <div class="flex gap-1 my-0.5" id="cards-2">
+                        <div class="card card-back"></div>
+                        <div class="card card-back"></div>
+                    </div>
+                    <div class="text-[11px] text-yellow-400 font-extrabold bg-black/60 px-2 py-0.2 rounded-full border border-yellow-500/20">
+                        $<span id="chips-2">1000</span>
+                    </div>
+                    <div id="action-2" class="text-[10px] text-yellow-300 h-3 mt-0.5 font-semibold"></div>
+                </div>
+            </div>
+
+            <!-- Center Community Cards & Pot -->
+            <div class="my-auto flex flex-col items-center justify-center py-1">
+                <div class="bg-black/70 backdrop-blur border border-yellow-500/40 px-3 py-0.5 rounded-full mb-1 flex items-center gap-1.5 shadow">
+                    <span class="text-[9px] uppercase tracking-wider text-gray-400 font-bold">POT</span>
+                    <span class="text-sm sm:text-base font-black text-yellow-400">$<span id="pot-amount">0</span></span>
+                </div>
+
+                <div id="community-cards" class="flex gap-1 sm:gap-2 p-1.5 bg-black/30 rounded-xl border border-white/10 items-center justify-center">
+                    <!-- Rendered Dynamically -->
+                </div>
+            </div>
+
+            <!-- Human Player Seat -->
+            <div class="w-full flex flex-col items-center shrink-0 pb-0.5">
+                <div id="human-eval" class="text-[10px] bg-emerald-950/90 text-emerald-300 px-2.5 py-0.2 rounded-full border border-emerald-500/30 font-semibold mb-0.5 opacity-0 transition-opacity">
+                    High Card
+                </div>
+
+                <div id="seat-0" class="flex flex-col items-center p-1.5 rounded-xl bg-black/50 border border-yellow-500/40 w-full max-w-xs relative transition-all">
+                    <div class="flex items-center gap-1 mb-0.5">
+                        <span class="text-[11px] font-bold text-white">You (Player)</span>
+                        <span id="dealer-0" class="hidden bg-white text-black text-[8px] font-extrabold px-1 rounded-full">D</span>
+                    </div>
+                    <div class="flex gap-1.5 my-0.5" id="cards-0">
+                        <div class="card card-back"></div>
+                        <div class="card card-back"></div>
+                    </div>
+                    <div class="text-[11px] text-yellow-400 font-extrabold bg-black/60 px-2.5 py-0.2 rounded-full border border-yellow-500/30">
+                        $<span id="chips-0">1000</span>
+                    </div>
+                    <div id="action-0" class="text-[10px] text-yellow-300 h-3 mt-0.5 font-semibold"></div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Compact Game Log + Fixed Action Panel (Sticky Bottom) -->
+    <footer class="shrink-0 flex flex-col gap-1 safe-pb">
+        <!-- Compact Mini Log -->
+        <div class="bg-gray-900/95 border border-gray-800 rounded-lg p-1.5 h-12 flex flex-col justify-center overflow-hidden">
+            <div id="game-log" class="text-[11px] text-gray-300 overflow-y-auto custom-scrollbar pr-1 space-y-0.5">
+                <div class="text-gray-500 italic">Starting new poker game...</div>
+            </div>
+        </div>
+
+        <!-- Action Panel -->
+        <div class="bg-gray-900/95 border border-gray-800 rounded-xl p-2 flex flex-col gap-1.5 shadow-lg">
+            <!-- Raise Slider Bar -->
+            <div class="flex items-center gap-2 px-1">
+                <span class="text-[11px] text-gray-400 font-bold whitespace-nowrap">Raise:</span>
+                <input type="range" id="raise-slider" min="0" max="1000" step="10" value="0" class="w-full accent-yellow-500 bg-gray-700 h-1.5 rounded-lg cursor-pointer" disabled>
+                <span class="text-[11px] font-black text-yellow-400 w-12 text-right">$<span id="raise-val">0</span></span>
+            </div>
+
+            <!-- Main Action Buttons -->
+            <div class="grid grid-cols-5 gap-1 min-h-[40px]">
+                <button id="btn-fold" disabled class="bg-red-600 hover:bg-red-500 active:bg-red-700 disabled:opacity-30 disabled:pointer-events-none text-white font-bold rounded-lg text-xs transition flex flex-col items-center justify-center py-2">
+                    Fold
+                </button>
+                <button id="btn-check" disabled class="bg-slate-700 hover:bg-slate-600 active:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none text-white font-bold rounded-lg text-xs transition flex flex-col items-center justify-center py-2">
+                    Check
+                </button>
+                <button id="btn-call" disabled class="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-30 disabled:pointer-events-none text-white font-bold rounded-lg text-xs transition flex flex-col items-center justify-center py-1">
+                    <span>Call</span>
+                    <span class="text-[10px] text-blue-200 font-normal">$<span id="call-val">0</span></span>
+                </button>
+                <button id="btn-raise" disabled class="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-30 disabled:pointer-events-none text-white font-bold rounded-lg text-xs transition flex flex-col items-center justify-center py-2">
+                    Raise
+                </button>
+                <button id="btn-allin" disabled class="bg-purple-600 hover:bg-purple-500 active:bg-purple-700 disabled:opacity-30 disabled:pointer-events-none text-white font-bold rounded-lg text-xs transition flex flex-col items-center justify-center py-2">
+                    All-In
+                </button>
+            </div>
+
+            <button id="btn-next" class="hidden w-full bg-yellow-500 hover:bg-yellow-400 active:bg-yellow-600 text-black font-black py-2 rounded-lg text-xs transition uppercase tracking-wider">
+                Next Hand ♠♥♣♦
+            </button>
+        </div>
+    </footer>
+
+    <!-- Logic Script -->
+    <script>
+        lucide.createIcons();
+
+        /* Game Constants */
+        const SUITS = ['♠', '♥', '♦', '♣'];
+        const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+        const VALUE_MAP = { '2':2, '3':3, '4':4, '5':5, '6':6, '7':7, '8':8, '9':9, '10':10, 'J':11, 'Q':12, 'K':13, 'A':14 };
+        
+        const HAND_RANKS = {
+            HIGH_CARD: 1, PAIR: 2, TWO_PAIR: 3, THREE_OF_A_KIND: 4,
+            STRAIGHT: 5, FLUSH: 6, FULL_HOUSE: 7, FOUR_OF_A_KIND: 8,
+            STRAIGHT_FLUSH: 9, ROYAL_FLUSH: 10
+        };
+
+        const HAND_NAMES = {
+            1: "High Card", 2: "One Pair", 3: "Two Pair", 4: "Three of a Kind",
+            5: "Straight", 6: "Flush", 7: "Full House", 8: "Four of a Kind",
+            9: "Straight Flush", 10: "Royal Flush"
+        };
+
+        /* State Variables */
+        let deck = [], players = [], communityCards = [];
+        let mainPot = 0, currentPhase = 'PRE-FLOP', dealerIdx = 0;
+        let activeIdx = 0, currentHighBet = 0, minBet = 20, handNum = 1;
+        let isHumanTurn = false;
+
+        /* DOM References */
+        const elPot = document.getElementById('pot-amount');
+        const elPhase = document.getElementById('phase-badge');
+        const elHandNum = document.getElementById('hand-count');
+        const elCommunity = document.getElementById('community-cards');
+        const elLog = document.getElementById('game-log');
+        const elHumanEval = document.getElementById('human-eval');
+
+        const elBtnFold = document.getElementById('btn-fold');
+        const elBtnCheck = document.getElementById('btn-check');
+        const elBtnCall = document.getElementById('btn-call');
+        const elBtnRaise = document.getElementById('btn-raise');
+        const elBtnAllin = document.getElementById('btn-allin');
+        const elBtnNext = document.getElementById('btn-next');
+        const elBtnReset = document.getElementById('btn-reset');
+
+        const elRaiseSlider = document.getElementById('raise-slider');
+        const elRaiseVal = document.getElementById('raise-val');
+        const elCallVal = document.getElementById('call-val');
+
+        /* Deck & Evaluation Functions */
+        function createDeck() {
+            const d = [];
+            for (let s of SUITS) {
+                for (let v of VALUES) {
+                    d.push({ suit: s, value: v, rank: VALUE_MAP[v] });
+                }
+            }
+            return d;
+        }
+
+        function shuffle(d) {
+            for (let i = d.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [d[i], d[j]] = [d[j], d[i]];
+            }
+            return d;
+        }
+
+        function getCombinations(arr, k) {
+            if (k === 0) return [[]];
+            if (arr.length === 0) return [];
+            const head = arr[0], tail = arr.slice(1);
+            return [...getCombinations(tail, k - 1).map(c => [head, ...c]), ...getCombinations(tail, k)];
+        }
+
+        function evaluateHand(cards) {
+            if (cards.length < 5) return { rank: 0, name: "Waiting", tiebreakers: [] };
+            const combos = getCombinations(cards, 5);
+            let best = null;
+            for (let c of combos) {
+                const res = eval5CardHand(c);
+                if (!best || compareHands(res, best) > 0) best = res;
+            }
+            return best;
+        }
+
+        function eval5CardHand(cards) {
+            const sorted = [...cards].sort((a, b) => b.rank - a.rank);
+            const ranks = sorted.map(c => c.rank);
+            const suits = sorted.map(c => c.suit);
+
+            const isFlush = suits.every(s => s === suits[0]);
+            let isStraight = false, straightHigh = 0;
+
+            if (ranks[0] - ranks[4] === 4 && new Set(ranks).size === 5) {
+                isStraight = true;
+                straightHigh = ranks[0];
+            } else if (ranks[0] === 14 && ranks[1] === 5 && ranks[2] === 4 && ranks[3] === 3 && ranks[4] === 2) {
+                isStraight = true;
+                straightHigh = 5;
+            }
+
+            const counts = {};
+            ranks.forEach(r => counts[r] = (counts[r] || 0) + 1);
+            const pairs = Object.entries(counts).map(([r, c]) => ({ rank: Number(r), count: c }));
+            pairs.sort((a, b) => b.count - a.count || b.rank - a.rank);
+
+            if (isStraight && isFlush) {
+                return { rank: straightHigh === 14 ? HAND_RANKS.ROYAL_FLUSH : HAND_RANKS.STRAIGHT_FLUSH, tiebreakers: [straightHigh], name: straightHigh === 14 ? HAND_NAMES[10] : HAND_NAMES[9] };
+            }
+            if (pairs[0].count === 4) return { rank: HAND_RANKS.FOUR_OF_A_KIND, tiebreakers: [pairs[0].rank, pairs[1].rank], name: HAND_NAMES[8] };
+            if (pairs[0].count === 3 && pairs[1].count === 2) return { rank: HAND_RANKS.FULL_HOUSE, tiebreakers: [pairs[0].rank, pairs[1].rank], name: HAND_NAMES[7] };
+            if (isFlush) return { rank: HAND_RANKS.FLUSH, tiebreakers: ranks, name: HAND_NAMES[6] };
+            if (isStraight) return { rank: HAND_RANKS.STRAIGHT, tiebreakers: [straightHigh], name: HAND_NAMES[5] };
+            if (pairs[0].count === 3) return { rank: HAND_RANKS.THREE_OF_A_KIND, tiebreakers: [pairs[0].rank, ...pairs.slice(1).map(p => p.rank)], name: HAND_NAMES[4] };
+            if (pairs[0].count === 2 && pairs[1].count === 2) return { rank: HAND_RANKS.TWO_PAIR, tiebreakers: [pairs[0].rank, pairs[1].rank, pairs[2].rank], name: HAND_NAMES[3] };
+            if (pairs[0].count === 2) return { rank: HAND_RANKS.PAIR, tiebreakers: [pairs[0].rank, ...pairs.slice(1).map(p => p.rank)], name: HAND_NAMES[2] };
+
+            return { rank: HAND_RANKS.HIGH_CARD, tiebreakers: ranks, name: HAND_NAMES[1] };
+        }
+
+        function compareHands(a, b) {
+            if (a.rank !== b.rank) return a.rank - b.rank;
+            for (let i = 0; i < a.tiebreakers.length; i++) {
+                if (a.tiebreakers[i] !== b.tiebreakers[i]) return a.tiebreakers[i] - b.tiebreakers[i];
+            }
+            return 0;
+        }
+
+        /* Game Core Loop */
+        function initGame() {
+            players = [
+                { id: 0, name: "You", chips: 1000, currentBet: 0, cards: [], folded: false, isAi: false },
+                { id: 1, name: "AI Alex", chips: 1000, currentBet: 0, cards: [], folded: false, isAi: true, aggro: 0.4 },
+                { id: 2, name: "AI Elena", chips: 1000, currentBet: 0, cards: [], folded: false, isAi: true, aggro: 0.7 }
+            ];
+            dealerIdx = 0;
+            handNum = 1;
+            startHand();
+        }
+
+        function startHand() {
+            if (players[0].chips <= 0) {
+                log("<span class='text-red-400 font-bold'>Out of chips! Auto-refilled $1000.</span>");
+                players[0].chips = 1000;
+            }
+
+            players.forEach(p => {
+                if (p.chips <= 0) p.chips = 500;
+                p.cards = []; p.currentBet = 0; p.folded = false; p.hasActed = false;
+            });
+
+            deck = shuffle(createDeck());
+            communityCards = [];
+            mainPot = 0;
+            currentPhase = 'PRE-FLOP';
+            currentHighBet = 0;
+
+            dealerIdx = (dealerIdx + 1) % players.length;
+
+            log(`--- <span class='text-yellow-400 font-bold'>Hand #${handNum}</span> ---`);
+
+            for (let i = 0; i < 2; i++) {
+                players.forEach(p => p.cards.push(deck.pop()));
+            }
+
+            const sbIdx = (dealerIdx + 1) % players.length;
+            const bbIdx = (dealerIdx + 2) % players.length;
+
+            postBet(players[sbIdx], Math.min(minBet / 2, players[sbIdx].chips), "SB");
+            postBet(players[bbIdx], Math.min(minBet, players[bbIdx].chips), "BB");
+
+            currentHighBet = Math.max(players[sbIdx].currentBet, players[bbIdx].currentBet);
+            activeIdx = (bbIdx + 1) % players.length;
+
+            renderCards();
+            updateUI();
+            processTurn();
+        }
+
+        function postBet(p, amount, label = "") {
+            p.chips -= amount;
+            p.currentBet += amount;
+            mainPot += amount;
+            if (label) log(`${p.name}: ${label} $${amount}`);
+        }
+
+        function processTurn() {
+            updateUI();
+
+            const activePlayers = players.filter(p => !p.folded);
+            if (activePlayers.length === 1) {
+                handleSingleWinner(activePlayers[0]);
+                return;
+            }
+
+            if (isRoundComplete()) {
+                advancePhase();
+                return;
+            }
+
+            const cur = players[activeIdx];
+            if (cur.folded || cur.chips === 0) {
+                nextTurn();
+                return;
+            }
+
+            if (cur.isAi) {
+                disableControls();
+                setActionText(cur.id, "Thinking...");
+                setTimeout(() => handleAiTurn(cur), 700);
+            } else {
+                isHumanTurn = true;
+                setActionText(0, "Your Turn!");
+                updateUI();
+            }
+        }
+
+        function isRoundComplete() {
+            const active = players.filter(p => !p.folded);
+            const allMatched = active.every(p => p.currentBet === currentHighBet || p.chips === 0);
+            const allActed = active.every(p => p.hasActed || p.chips === 0);
+            return allMatched && allActed;
+        }
+
+        function nextTurn() {
+            activeIdx = (activeIdx + 1) % players.length;
+            processTurn();
+        }
+
+        function advancePhase() {
+            players.forEach(p => { p.currentBet = 0; p.hasActed = false; });
+            currentHighBet = 0;
+
+            if (currentPhase === 'PRE-FLOP') {
+                currentPhase = 'FLOP';
+                communityCards.push(deck.pop(), deck.pop(), deck.pop());
+                log(`<b class="text-emerald-400">FLOP</b>: ${formatCards(communityCards)}`);
+            } else if (currentPhase === 'FLOP') {
+                currentPhase = 'TURN';
+                communityCards.push(deck.pop());
+                log(`<b class="text-emerald-400">TURN</b>: ${formatCards([communityCards[3]])}`);
+            } else if (currentPhase === 'TURN') {
+                currentPhase = 'RIVER';
+                communityCards.push(deck.pop());
+                log(`<b class="text-emerald-400">RIVER</b>: ${formatCards([communityCards[4]])}`);
+            } else if (currentPhase === 'RIVER') {
+                currentPhase = 'SHOWDOWN';
+                handleShowdown();
+                return;
+            }
+
+            renderCards();
+            activeIdx = (dealerIdx + 1) % players.length;
+            processTurn();
+        }
+
+        /* AI Logic */
+        function handleAiTurn(ai) {
+            ai.hasActed = true;
+            const callAmt = currentHighBet - ai.currentBet;
+            const evalRes = evaluateHand([...ai.cards, ...communityCards]);
+            const handRank = evalRes.rank || 1;
+            const rand = Math.random();
+
+            if (callAmt === 0) {
+                if (handRank >= HAND_RANKS.PAIR && rand < ai.aggro) {
+                    const raiseAmt = Math.min(minBet * 2, ai.chips);
+                    if (raiseAmt > 0) return aiRaise(ai, raiseAmt);
+                }
+                aiCheck(ai);
+            } else {
+                if (callAmt >= ai.chips) {
+                    if (handRank >= HAND_RANKS.TWO_PAIR || (handRank >= HAND_RANKS.PAIR && rand > 0.5)) {
+                        aiCall(ai);
+                    } else {
+                        aiFold(ai);
+                    }
+                    return;
+                }
+
+                if (handRank >= HAND_RANKS.THREE_OF_A_KIND && rand < ai.aggro) {
+                    const raiseAmt = Math.min(callAmt + minBet * 2, ai.chips);
+                    aiRaise(ai, raiseAmt);
+                } else if (handRank >= HAND_RANKS.PAIR || rand > 0.35) {
+                    aiCall(ai);
+                } else {
+                    aiFold(ai);
+                }
+            }
+        }
+
+        function aiCheck(ai) { setActionText(ai.id, "Check"); log(`${ai.name}: Check`); nextTurn(); }
+        function aiCall(ai) {
+            const amt = Math.min(currentHighBet - ai.currentBet, ai.chips);
+            postBet(ai, amt);
+            setActionText(ai.id, `Call ($${amt})`);
+            log(`${ai.name}: Call $${amt}`);
+            nextTurn();
+        }
+        function aiRaise(ai, raiseAmt) {
+            postBet(ai, raiseAmt);
+            currentHighBet = ai.currentBet;
+            setActionText(ai.id, `Raise ($${ai.currentBet})`);
+            log(`<span class="text-yellow-300">${ai.name}: Raised $${ai.currentBet}</span>`);
+            nextTurn();
+        }
+        function aiFold(ai) {
+            ai.folded = true;
+            setActionText(ai.id, "Fold");
+            log(`<span class="text-gray-400">${ai.name}: Fold</span>`);
+            nextTurn();
+        }
+
+        /* Human Actions */
+        function humanFold() {
+            if (!isHumanTurn) return;
+            players[0].folded = true; players[0].hasActed = true;
+            setActionText(0, "Fold");
+            log("<span class='text-red-400'>You Folded.</span>");
+            disableControls(); isHumanTurn = false; nextTurn();
+        }
+
+        function humanCheck() {
+            if (!isHumanTurn) return;
+            players[0].hasActed = true;
+            setActionText(0, "Check");
+            log("You: Check");
+            disableControls(); isHumanTurn = false; nextTurn();
+        }
+
+        function humanCall() {
+            if (!isHumanTurn) return;
+            const callAmt = Math.min(currentHighBet - players[0].currentBet, players[0].chips);
+            postBet(players[0], callAmt);
+            players[0].hasActed = true;
+            setActionText(0, `Call ($${callAmt})`);
+            log(`You: Call $${callAmt}`);
+            disableControls(); isHumanTurn = false; nextTurn();
+        }
+
+        function humanRaise() {
+            if (!isHumanTurn) return;
+            const targetBet = parseInt(elRaiseSlider.value, 10);
+            const needed = targetBet - players[0].currentBet;
+            if (needed <= 0 || needed > players[0].chips) return;
+
+            postBet(players[0], needed);
+            currentHighBet = players[0].currentBet;
+            players[0].hasActed = true;
+            setActionText(0, `Raise ($${players[0].currentBet})`);
+            log(`<span class='text-yellow-400 font-bold'>You: Raised to $${players[0].currentBet}!</span>`);
+            disableControls(); isHumanTurn = false; nextTurn();
+        }
+
+        function humanAllIn() {
+            if (!isHumanTurn) return;
+            const allInAmt = players[0].chips;
+            postBet(players[0], allInAmt);
+            if (players[0].currentBet > currentHighBet) currentHighBet = players[0].currentBet;
+            players[0].hasActed = true;
+            setActionText(0, `All-In ($${players[0].currentBet})`);
+            log(`<span class='text-purple-400 font-bold'>You: ALL-IN $${players[0].currentBet}!</span>`);
+            disableControls(); isHumanTurn = false; nextTurn();
+        }
+
+        /* Showdown & End Hand */
+        function handleSingleWinner(winner) {
+            winner.chips += mainPot;
+            log(`<b class="text-yellow-400">🎉 ${winner.name} won $${mainPot}!</b>`);
+            endHandUI();
+        }
+
+        function handleShowdown() {
+            log(`<b class="text-yellow-400">--- SHOWDOWN ---</b>`);
+            renderCards(true);
+
+            const active = players.filter(p => !p.folded);
+            const evals = active.map(p => {
+                const res = evaluateHand([...p.cards, ...communityCards]);
+                log(`${p.name}: <span class="text-emerald-300 font-bold">${res.name}</span>`);
+                return { player: p, eval: res };
+            });
+
+            evals.sort((a, b) => compareHands(b.eval, a.eval));
+            const topEval = evals[0].eval;
+            const winners = evals.filter(e => compareHands(e.eval, topEval) === 0).map(e => e.player);
+
+            const split = Math.floor(mainPot / winners.length);
+            winners.forEach(w => w.chips += split);
+
+            if (winners.length === 1) {
+                log(`<b class="text-yellow-400">🏆 Winner: ${winners[0].name} ($${mainPot}) - ${topEval.name}</b>`);
+            } else {
+                const names = winners.map(w => w.name).join(', ');
+                log(`<b class="text-yellow-400">🤝 Split (${names}) - $${split} each</b>`);
+            }
+
+            endHandUI();
+        }
+
+        function endHandUI() {
+            disableControls();
+            elBtnNext.classList.remove('hidden');
+            handNum++;
+            updateUI();
+        }
+
+        /* Rendering Helpers */
+        function renderCards(revealAll = false) {
+            elCommunity.innerHTML = '';
+            for (let i = 0; i < 5; i++) {
+                if (i < communityCards.length) {
+                    elCommunity.appendChild(createCardElem(communityCards[i]));
+                } else {
+                    const label = i < 3 ? 'FLOP' : (i === 3 ? 'TURN' : 'RIVER');
+                    const ph = document.createElement('div');
+                    ph.className = "border border-dashed border-white/10 rounded w-[44px] sm:w-[64px] h-[64px] sm:h-[92px] flex items-center justify-center text-white/20 font-bold text-[9px] sm:text-xs";
+                    ph.innerText = label;
+                    elCommunity.appendChild(ph);
+                }
+            }
+
+            players.forEach(p => {
+                const box = document.getElementById(`cards-${p.id}`);
+                box.innerHTML = '';
+                if (p.folded) {
+                    box.innerHTML = `<span class="text-[10px] text-red-400 font-bold py-4">FOLDED</span>`;
+                    return;
+                }
+                p.cards.forEach(c => {
+                    if (p.isAi && !revealAll) {
+                        const back = document.createElement('div');
+                        back.className = 'card card-back';
+                        box.appendChild(back);
+                    } else {
+                        box.appendChild(createCardElem(c));
+                    }
+                });
+            });
+
+            if (players[0].cards.length === 2) {
+                const evalNow = evaluateHand([...players[0].cards, ...communityCards]);
+                elHumanEval.innerText = `Hand: ${evalNow.name}`;
+                elHumanEval.classList.remove('opacity-0');
+            } else {
+                elHumanEval.classList.add('opacity-0');
+            }
+        }
+
+        function createCardElem(card) {
+            const div = document.createElement('div');
+            const isRed = card.suit === '♥' || card.suit === '♦';
+            div.className = `card ${isRed ? 'red' : 'black'}`;
+            div.innerHTML = `
+                <div class="text-left font-black text-[10px] sm:text-xs leading-none">${card.value}<br><span class="text-[8px] sm:text-[10px]">${card.suit}</span></div>
+                <div class="text-center text-xs sm:text-sm">${card.suit}</div>
+                <div class="text-right font-black text-[10px] sm:text-xs leading-none rotate-180">${card.value}<br><span class="text-[8px] sm:text-[10px]">${card.suit}</span></div>
+            `;
+            return div;
+        }
+
+        function formatCards(cards) {
+            return cards.map(c => `[${c.value}${c.suit}]`).join(' ');
+        }
+
+        function updateUI() {
+            elPot.innerText = mainPot;
+            elPhase.innerText = currentPhase;
+            elHandNum.innerText = handNum;
+
+            players.forEach(p => {
+                document.getElementById(`chips-${p.id}`).innerText = p.chips;
+                const seat = document.getElementById(`seat-${p.id}`);
+                const dealer = document.getElementById(`dealer-${p.id}`);
+
+                if (p.id === activeIdx && currentPhase !== 'SHOWDOWN') {
+                    seat.classList.add('border-yellow-400', 'glow-gold');
+                } else {
+                    seat.classList.remove('border-yellow-400', 'glow-gold');
+                }
+
+                if (p.id === dealerIdx) dealer.classList.remove('hidden');
+                else dealer.classList.add('hidden');
+            });
+
+            if (isHumanTurn) {
+                const callAmt = currentHighBet - players[0].currentBet;
+                elCallVal.innerText = callAmt;
+
+                const minRaise = Math.max(currentHighBet + minBet, currentHighBet * 2);
+                const maxRaise = players[0].chips + players[0].currentBet;
+
+                if (maxRaise >= minRaise) {
+                    elRaiseSlider.min = minRaise;
+                    elRaiseSlider.max = maxRaise;
+                    elRaiseSlider.value = minRaise;
+                    elRaiseVal.innerText = minRaise;
+                    elBtnRaise.disabled = false;
+                    elRaiseSlider.disabled = false;
+                } else {
+                    elBtnRaise.disabled = true;
+                    elRaiseSlider.disabled = true;
+                    elRaiseVal.innerText = "-";
+                }
+
+                elBtnCheck.disabled = callAmt !== 0;
+                elBtnCall.disabled = callAmt === 0 || callAmt > players[0].chips;
+                elBtnFold.disabled = false;
+                elBtnAllin.disabled = players[0].chips === 0;
+            }
+        }
+
+        function disableControls() {
+            elBtnFold.disabled = true;
+            elBtnCheck.disabled = true;
+            elBtnCall.disabled = true;
+            elBtnRaise.disabled = true;
+            elBtnAllin.disabled = true;
+            elRaiseSlider.disabled = true;
+        }
+
+        function setActionText(id, txt) {
+            document.getElementById(`action-${id}`).innerText = txt;
+        }
+
+        function log(msg) {
+            const div = document.createElement('div');
+            div.className = "py-0.2 border-b border-gray-800/40";
+            div.innerHTML = msg;
+            elLog.appendChild(div);
+            elLog.scrollTop = elLog.scrollHeight;
+        }
+
+        /* Event Handlers */
+        elBtnFold.addEventListener('click', humanFold);
+        elBtnCheck.addEventListener('click', humanCheck);
+        elBtnCall.addEventListener('click', humanCall);
+        elBtnRaise.addEventListener('click', humanRaise);
+        elBtnAllin.addEventListener('click', humanAllIn);
+
+        elRaiseSlider.addEventListener('input', (e) => {
+            elRaiseVal.innerText = e.target.value;
+        });
+
+        elBtnNext.addEventListener('click', () => {
+            elBtnNext.classList.add('hidden');
+            players.forEach(p => setActionText(p.id, ""));
+            startHand();
+        });
+
+        elBtnReset.addEventListener('click', () => {
+            elBtnNext.classList.add('hidden');
+            players.forEach(p => setActionText(p.id, ""));
+            initGame();
+        });
+
+        window.onload = function() {
+            initGame();
+        };
+    </script>
+</body>
+</html>
