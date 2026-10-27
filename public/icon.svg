@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108">
+  <rect width="108" height="108" rx="25" fill="#102126"/>
+  <rect x="5" y="5" width="98" height="98" rx="21" fill="none" stroke="#c4aa70" stroke-opacity=".35"/>
+  <g id="cards" transform="translate(54 54) scale(1.1) translate(-54 -54)">
+    <g transform="rotate(-14 46 54)">
+      <path d="M36 30H58Q63 30 63 35V71Q63 76 58 76H36Q31 76 31 71V35Q31 30 36 30Z" fill="#1e363a" stroke="#c4aa70" stroke-width="1.5"/>
+      <path d="M36 35H58V71H36Z" fill="none" stroke="#c4aa70" stroke-opacity=".45"/>
+      <path d="M47 43L54 53L47 63L40 53Z" fill="none" stroke="#c4aa70" stroke-width="1.2"/>
+    </g>
+    <g transform="rotate(10 60 54)">
+      <path d="M49 30H71Q76 30 76 35V71Q76 76 71 76H49Q44 76 44 71V35Q44 30 49 30Z" fill="#f3efdf" stroke="#fff9e8" stroke-width="1"/>
+      <path d="M60 41C56 46 50 49 50 54C50 58 55 60 59 56C59 60 57 63 55 65H65C63 63 61 60 61 56C65 60 70 58 70 54C70 49 64 46 60 41Z" fill="#102126"/>
+      <path d="M48 40L50 35L52 40M49 38H51" fill="none" stroke="#9e8048" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M69 66L72 70L69 74L66 70Z" fill="#b49759"/>
+    </g>
+  </g>
+</svg>

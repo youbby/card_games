@@ -162,7 +162,7 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
             />
           );
         })}
-        <div className="absolute left-1/2 top-[42%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2">
+        <div className={cx('absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2', session.seatCount >= 4 ? 'top-[52%]' : 'top-[42%]')}>
           <PotView hand={hand} />
           <div data-testid="community-cards" className="flex gap-1">
             {Array.from({ length: 5 }, (_, i) =>
@@ -202,7 +202,7 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
       </div>
 
       <div className="safe-bottom shrink-0 px-3 pt-2">
-        <LogStrip view={view} open={showLog} onToggle={() => setShowLog((v) => !v)} />
+        <LogStrip view={view} open={showLog} onToggle={() => setShowLog((v) => !v)} onClose={() => setShowLog(false)} />
         <div className="table-actions flex flex-col justify-end" data-testid="table-actions">
           <ActionArea
             view={view}
@@ -299,11 +299,29 @@ function ResultBanner({ hand }: { hand: HandState }) {
   );
 }
 
-function DealerChip() {
+function PositionChips({ hand, index, className }: { hand: HandState | null; index: number; className: string }) {
+  if (!hand || index < 0) return null;
+  const positions = [
+    { role: 'D', label: '딜러', seat: hand.button },
+    { role: 'SB', label: '스몰 블라인드', seat: hand.sbIndex },
+    { role: 'BB', label: '빅 블라인드', seat: hand.bbIndex },
+  ].filter((position) => position.seat === index);
+  if (!positions.length) return null;
   return (
-    <span className="absolute -right-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-gray-400 bg-white text-[10px] font-black text-black">
-      D
-    </span>
+    <div className={cx('pointer-events-none', className)}>
+      {positions.map(({ role, label }) => (
+        <span
+          key={role}
+          className={cx('position-chip', `position-chip-${role.toLowerCase()}`)}
+          data-position={role}
+          data-player-index={index}
+          aria-label={`${hand.players[index].name}: ${label}`}
+          title={label}
+        >
+          {role}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -339,9 +357,13 @@ function OpponentSeat({
     );
   }
   const reveal = !!hand?.result?.showdown && !!player && !player.folded;
-  const isButton = !!hand && index === hand.button;
   return (
     <div className="absolute z-10 flex w-[76px] flex-col items-center" style={style}>
+      <PositionChips
+        hand={hand}
+        index={index}
+        className={cx('absolute top-1 z-20 flex flex-col gap-1', parseFloat(pos.left) > 50 ? '-left-3' : '-right-3')}
+      />
       <div
         className={cx(
           'relative flex w-full flex-col items-center rounded-xl border border-white/10 bg-black/55 px-1 pb-1 pt-1.5 transition',
@@ -350,7 +372,6 @@ function OpponentSeat({
           (player?.folded || !player) && 'opacity-45',
         )}
       >
-        {isButton && <DealerChip />}
         <div className="flex h-9 items-center -space-x-2">
           {player && !player.folded ? (
             player.hole.length ? (
@@ -377,7 +398,7 @@ function OpponentSeat({
       <div className="mt-0.5 flex h-4 items-center gap-1">
         {thinking ? (
           <span className="thinking text-[10px] font-bold text-yellow-300">생각 중…</span>
-        ) : label ? (
+        ) : label && !/^(SB|BB) /.test(label) ? (
           <span className="rounded-full bg-black/60 px-1.5 text-[10px] font-bold text-yellow-200">{label}</span>
         ) : !player && record.stack === 0 ? (
           <span className="text-[10px] text-gray-500">대기</span>
@@ -411,7 +432,6 @@ function MySeat({
     if (hand.board.length < 3) return preflopLabel(player.hole);
     return evaluate([...player.hole, ...hand.board], false).name;
   }, [player, hand]);
-  const isButton = !!hand && index === hand.button;
   return (
     <div
       className={cx(
@@ -421,7 +441,7 @@ function MySeat({
         player?.folded && 'opacity-60',
       )}
     >
-      {isButton && <DealerChip />}
+      <PositionChips hand={hand} index={index} className="absolute -top-9 right-3 z-20 flex gap-1.5" />
       <div className="flex gap-1">
         {player?.hole.length ? (
           player.hole.map((c, k) => (
@@ -450,15 +470,31 @@ function MySeat({
           {handName && !player?.folded && (
             <span className="rounded-full bg-emerald-950 px-2 text-[11px] font-bold text-emerald-300">{handName}</span>
           )}
-          {label && <span className="text-[11px] font-bold text-yellow-200">{label}</span>}
+          {label && !/^(SB|BB) /.test(label) && <span className="text-[11px] font-bold text-yellow-200">{label}</span>}
         </div>
       </div>
     </div>
   );
 }
 
-function LogStrip({ view, open, onToggle }: { view: TableView; open: boolean; onToggle: () => void }) {
+function LogStrip({ view, open, onToggle, onClose }: { view: TableView; open: boolean; onToggle: () => void; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const dismissOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !containerRef.current?.contains(event.target)) onClose();
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('pointerdown', dismissOutside, true);
+    document.addEventListener('keydown', dismissOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', dismissOutside, true);
+      document.removeEventListener('keydown', dismissOnEscape);
+    };
+  }, [open, onClose]);
   useEffect(() => {
     if (open && ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [open, view.log]);
@@ -466,9 +502,9 @@ function LogStrip({ view, open, onToggle }: { view: TableView; open: boolean; on
   const toneClass = (t: string) =>
     t === 'win' ? 'text-yellow-300 font-bold' : t === 'street' ? 'text-emerald-300' : t === 'system' ? 'text-gray-500' : t === 'mine' ? 'text-sky-300' : 'text-gray-300';
   return (
-    <div className="relative mb-2 h-8 rounded-xl border border-gray-800 bg-gray-950/95">
+    <div ref={containerRef} className="relative mb-2 h-8 rounded-xl border border-gray-800 bg-gray-950/95">
       {open && (
-        <div ref={ref} className="absolute inset-x-0 bottom-full z-40 mb-1 max-h-40 space-y-0.5 overflow-y-auto rounded-xl border border-gray-700 bg-gray-950 p-3 text-[11px]">
+        <div id="hand-history-panel" ref={ref} className="absolute inset-x-0 bottom-full z-40 mb-1 max-h-40 space-y-0.5 overflow-y-auto rounded-xl border border-gray-700 bg-gray-950 p-3 text-[11px]">
           {view.log.map((l) => (
             <div key={l.id} className={toneClass(l.tone)}>
               {l.text}
@@ -476,7 +512,7 @@ function LogStrip({ view, open, onToggle }: { view: TableView; open: boolean; on
           ))}
         </div>
       )}
-      <button className="flex h-full w-full items-center gap-2 px-3 text-left text-[11px]" onClick={onToggle} aria-expanded={open} aria-label="핸드 기록">
+      <button className="flex h-full w-full items-center gap-2 px-3 text-left text-[11px]" onClick={onToggle} aria-expanded={open} aria-controls="hand-history-panel" aria-label="핸드 기록">
         <ScrollText className="h-3.5 w-3.5 shrink-0 text-gray-500" />
         <span className={cx('flex-1 truncate', last && toneClass(last.tone))}>{last?.text ?? ''}</span>
         <ChevronUp className={cx('h-3.5 w-3.5 text-gray-500 transition', open && 'rotate-180')} />
@@ -613,33 +649,33 @@ function BetControls({ hand, onAct }: { hand: HandState; onAct: (a: Parameters<T
         <button
           disabled={!legal.canFold}
           onClick={() => onAct({ type: 'fold' })}
-          className="rounded-xl bg-red-600 py-3.5 text-sm font-extrabold text-white active:bg-red-700 disabled:opacity-25"
+          className="poker-action poker-action-fold"
         >
           폴드
         </button>
         {legal.canCheck ? (
-          <button onClick={() => onAct({ type: 'check' })} className="rounded-xl bg-slate-600 py-3.5 text-sm font-extrabold text-white active:bg-slate-700">
+          <button onClick={() => onAct({ type: 'check' })} className="poker-action poker-action-call">
             체크
           </button>
         ) : (
-          <button onClick={() => onAct({ type: 'call' })} className="rounded-xl bg-blue-600 py-2 text-sm font-extrabold leading-tight text-white active:bg-blue-700">
+          <button onClick={() => onAct({ type: 'call' })} className="poker-action poker-action-call">
             {callIsAllIn ? '올인 콜' : '콜'}
-            <div className="text-[11px] font-bold text-blue-200 tabular-nums">{fmt(legal.callAmount)}</div>
+            <span className="poker-action-amount">{fmt(legal.callAmount)}</span>
           </button>
         )}
         {raiseOpen ? (
           <button
             onClick={() => onAct({ type: 'raise', to: amount })}
-            className="rounded-xl bg-emerald-500 py-2 text-sm font-extrabold leading-tight text-black active:bg-emerald-600"
+            className="poker-action poker-action-raise"
           >
             {amount >= legal.maxRaiseTo ? '올인' : isBet ? '벳' : '레이즈'}
-            <div className="text-[11px] font-bold tabular-nums">{fmt(amount)}</div>
+            <span className="poker-action-amount">{fmt(amount)}</span>
           </button>
         ) : (
           <button
             disabled={!legal.canRaise}
             onClick={() => setRaiseOpen(true)}
-            className="rounded-xl bg-emerald-600 py-3.5 text-sm font-extrabold text-white active:bg-emerald-700 disabled:opacity-25"
+            className="poker-action poker-action-raise"
           >
             {legal.minRaiseTo >= legal.maxRaiseTo && legal.canRaise ? '올인' : isBet ? '벳' : '레이즈'}
           </button>

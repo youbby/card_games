@@ -169,7 +169,7 @@ export function Avatar({ emoji, size = 'md', dim }: { emoji: string; size?: 'sm'
 const CARD_SIZES = {
   xs: 'h-9 w-[26px] text-[10px] rounded',
   sm: 'h-12 w-[34px] text-xs rounded-md',
-  board: 'h-14 w-10 text-sm rounded-md',
+  board: 'h-14 w-10 text-sm rounded-md max-[380px]:h-[50px] max-[380px]:w-8 max-[380px]:text-xs',
   md: 'h-[62px] w-11 text-sm rounded-md',
   lg: 'h-[78px] w-14 text-base rounded-lg',
 };
