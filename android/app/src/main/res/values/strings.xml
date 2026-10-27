@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Card Games</string>
+    <string name="title_activity_main">Card Games</string>
+    <string name="package_name">com.changyoub.cardgames</string>
+    <string name="custom_url_scheme">com.changyoub.cardgames</string>
+</resources>
