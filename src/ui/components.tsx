@@ -135,7 +135,7 @@ export function Chips({ amount, className }: { amount: number; className?: strin
   );
 }
 
-export const CLASS_LABEL: Record<CpuClass, string> = { LOW: 'Low', HIGH: 'High' };
+export const CLASS_LABEL: Record<CpuClass, string> = { LOW: '하수', HIGH: '고수' };
 
 export function ClassBadge({ cls, className }: { cls: CpuClass; className?: string }) {
   return (
@@ -197,7 +197,7 @@ export function PlayingCard({
         'card-face deal-in relative flex shrink-0 flex-col justify-between p-0.5 font-black leading-none',
         CARD_SIZES[size],
         isRed(card) ? 'text-red-600' : 'text-gray-900',
-        highlight && 'outline-2 outline-offset-1 outline-yellow-400 -translate-y-1',
+        highlight && 'outline-2 outline-offset-1 outline-yellow-400',
         dim && 'opacity-50',
       )}
     >

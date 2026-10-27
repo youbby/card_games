@@ -15,7 +15,7 @@ export interface StakeLevel {
 export const STAKES: StakeLevel[] = [
   { id: 'ENTRY', name: '입문', sb: 10, bb: 20, minBuyIn: 400, maxBuyIn: 2_000, classes: ['LOW'] },
   { id: 'NORMAL', name: '일반', sb: 25, bb: 50, minBuyIn: 1_000, maxBuyIn: 5_000, classes: ['LOW'] },
-  { id: 'MID', name: '중급', sb: 50, bb: 100, minBuyIn: 2_000, maxBuyIn: 10_000, classes: ['LOW', 'HIGH'] },
+  { id: 'MID', name: '중급', sb: 50, bb: 100, minBuyIn: 2_000, maxBuyIn: 10_000, classes: ['HIGH'] },
   { id: 'HIGH', name: '고급', sb: 100, bb: 200, minBuyIn: 4_000, maxBuyIn: 20_000, classes: ['HIGH'] },
   { id: 'VIP', name: 'VIP', sb: 500, bb: 1_000, minBuyIn: 20_000, maxBuyIn: 100_000, classes: ['HIGH'] },
 ];

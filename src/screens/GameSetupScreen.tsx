@@ -11,8 +11,8 @@ import { Avatar, Button, Chips, ClassBadge, cx, fmt, Page, personalityTags, Sect
 import { useAsync } from '../ui/hooks';
 
 const CLASS_INFO: Record<CpuClass, { title: string; desc: string }> = {
-  LOW: { title: 'Low', desc: '실수가 많은 초보 상대 · 입문~중급' },
-  HIGH: { title: 'High', desc: '확률과 성향을 읽는 상대 · 중급~VIP' },
+  LOW: { title: '하수', desc: '실수가 많은 초보 상대 · 입문~일반' },
+  HIGH: { title: '고수', desc: '확률과 성향을 읽는 상대 · 중급~VIP' },
 };
 
 export function GameSetupScreen() {
@@ -114,7 +114,7 @@ export function GameSetupScreen() {
         </Button>
       }
     >
-      <Section title="① 상대 클래스">
+      <Section title="① 상대 난이도">
         <div className="grid grid-cols-2 gap-2">
           {(['LOW', 'HIGH'] as CpuClass[]).map((c) => (
             <button
@@ -154,7 +154,7 @@ export function GameSetupScreen() {
         </div>
         {availability && maxSeats < MAX_SEATS && (
           <p className="mt-2 text-[11px] text-gray-500">
-            {maxSeats < MIN_SEATS ? '지금 참가할 수 있는 CPU가 없습니다.' : `참가 가능한 CPU가 부족해 최대 ${maxSeats}명까지 가능합니다.`}
+            {maxSeats < MIN_SEATS ? '지금 참가할 수 있는 상대 선수가 없습니다.' : `참가 가능한 상대가 부족해 최대 ${maxSeats}명까지 가능합니다.`}
           </p>
         )}
       </Section>
@@ -169,7 +169,7 @@ export function GameSetupScreen() {
               : !a.canAfford
                 ? `최소 ${fmt(s.minBuyIn)}칩 필요`
                 : a.eligibleCpus < seats - 1
-                  ? `참가 가능한 CPU ${a.eligibleCpus}명`
+                  ? `참가 가능한 상대 ${a.eligibleCpus}명`
                   : '';
             return (
               <button

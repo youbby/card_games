@@ -72,7 +72,7 @@ export function LobbyScreen() {
       <Section title="메뉴">
         <div className="grid grid-cols-3 gap-2">
           <MenuButton icon={<BarChart3 className="h-5 w-5" />} label="내 전적" onClick={() => push({ name: 'stats', characterId: player.id })} />
-          <MenuButton icon={<Bot className="h-5 w-5" />} label="CPU 목록" onClick={() => push({ name: 'cpus' })} />
+          <MenuButton icon={<Bot className="h-5 w-5" />} label="상대 선수" onClick={() => push({ name: 'cpus' })} />
           <MenuButton icon={<Users className="h-5 w-5" />} label="캐릭터 변경" onClick={back} />
         </div>
       </Section>

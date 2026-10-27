@@ -122,7 +122,7 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
   const handLive = !!hand && !result;
 
   return (
-    <div className="mx-auto flex h-full max-w-lg flex-col">
+    <div className="mx-auto flex h-full min-h-0 max-w-lg flex-col overflow-hidden">
       <header className="safe-top flex shrink-0 items-center gap-2 px-3 pb-1.5">
         <button
           className="flex items-center gap-1 rounded-lg border border-gray-800 bg-gray-900 px-2.5 py-1.5 text-xs font-bold text-gray-300 active:bg-gray-800"
@@ -141,7 +141,7 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
       </header>
 
       {/* Table */}
-      <div className="relative mx-2 min-h-0 flex-1">
+      <div data-testid="table-board" className="relative mx-2 min-h-0 flex-1">
         <div className="felt absolute inset-x-1 bottom-2 top-10 rounded-[45%]" />
         {session.seats.slice(1, session.seatCount).map((record, k) => {
           const seat = k + 1;
@@ -164,7 +164,7 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
         })}
         <div className="absolute left-1/2 top-[42%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2">
           <PotView hand={hand} />
-          <div className="flex gap-1">
+          <div data-testid="community-cards" className="flex gap-1">
             {Array.from({ length: 5 }, (_, i) =>
               hand && hand.board[i] !== undefined ? (
                 <PlayingCard
@@ -179,12 +179,16 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
               ),
             )}
           </div>
-          {result && <ResultBanner hand={hand!} />}
+          {result && (
+            <div data-testid="hand-result" className="pointer-events-none absolute inset-x-0 top-full pt-2">
+              <ResultBanner hand={hand!} />
+            </div>
+          )}
         </div>
       </div>
 
       {/* Me */}
-      <div className="shrink-0 px-3">
+      <div data-testid="my-cards" className="shrink-0 px-3">
         <MySeat
           record={session.seats[0]!}
           player={me}
@@ -199,16 +203,18 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
 
       <div className="safe-bottom shrink-0 px-3 pt-2">
         <LogStrip view={view} open={showLog} onToggle={() => setShowLog((v) => !v)} />
-        <ActionArea
-          view={view}
-          balance={balance}
-          onAct={(a) => runnerRef.current?.humanAct(a)}
-          onNext={() => void runnerRef.current?.startNextHand()}
-          onRebuy={(amount) =>
-            runnerRef.current?.rebuy(amount).catch((e: unknown) => showToast(e instanceof Error ? e.message : String(e)))
-          }
-          onLeave={leave}
-        />
+        <div className="table-actions flex flex-col justify-end" data-testid="table-actions">
+          <ActionArea
+            view={view}
+            balance={balance}
+            onAct={(a) => runnerRef.current?.humanAct(a)}
+            onNext={() => void runnerRef.current?.startNextHand()}
+            onRebuy={(amount) =>
+              runnerRef.current?.rebuy(amount).catch((e: unknown) => showToast(e instanceof Error ? e.message : String(e)))
+            }
+            onLeave={leave}
+          />
+        </div>
       </div>
 
       {confirmLeave && (
@@ -460,9 +466,9 @@ function LogStrip({ view, open, onToggle }: { view: TableView; open: boolean; on
   const toneClass = (t: string) =>
     t === 'win' ? 'text-yellow-300 font-bold' : t === 'street' ? 'text-emerald-300' : t === 'system' ? 'text-gray-500' : t === 'mine' ? 'text-sky-300' : 'text-gray-300';
   return (
-    <div className="mb-2 rounded-xl border border-gray-800 bg-gray-950/90">
+    <div className="relative mb-2 h-8 rounded-xl border border-gray-800 bg-gray-950/95">
       {open && (
-        <div ref={ref} className="max-h-40 space-y-0.5 overflow-y-auto px-3 pt-2 text-[11px]">
+        <div ref={ref} className="absolute inset-x-0 bottom-full z-40 mb-1 max-h-40 space-y-0.5 overflow-y-auto rounded-xl border border-gray-700 bg-gray-950 p-3 text-[11px]">
           {view.log.map((l) => (
             <div key={l.id} className={toneClass(l.tone)}>
               {l.text}
@@ -470,7 +476,7 @@ function LogStrip({ view, open, onToggle }: { view: TableView; open: boolean; on
           ))}
         </div>
       )}
-      <button className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px]" onClick={onToggle}>
+      <button className="flex h-full w-full items-center gap-2 px-3 text-left text-[11px]" onClick={onToggle} aria-expanded={open} aria-label="핸드 기록">
         <ScrollText className="h-3.5 w-3.5 shrink-0 text-gray-500" />
         <span className={cx('flex-1 truncate', last && toneClass(last.tone))}>{last?.text ?? ''}</span>
         <ChevronUp className={cx('h-3.5 w-3.5 text-gray-500 transition', open && 'rotate-180')} />
@@ -504,7 +510,7 @@ function ActionArea({
   if (phase === 'noOpponents') {
     return (
       <div className="space-y-2 pb-1">
-        <p className="text-center text-sm text-gray-400">함께 플레이할 수 있는 CPU가 없습니다.</p>
+        <p className="text-center text-sm text-gray-400">함께 플레이할 수 있는 상대 선수가 없습니다.</p>
         <Button variant="primary" className="w-full" onClick={onLeave}>
           일어나기
         </Button>
@@ -514,7 +520,7 @@ function ActionArea({
   if (phase === 'handOver' && hand?.result) {
     const net = human >= 0 ? hand.result.net[human] : 0;
     return (
-      <div className="flex items-center gap-2 pb-1">
+      <div className="flex h-14 items-center gap-2">
         <div className={cx('w-24 text-center text-lg font-extrabold tabular-nums', net > 0 ? 'text-emerald-400' : net < 0 ? 'text-red-400' : 'text-gray-400')}>
           {net > 0 ? '+' : ''}
           {fmt(net)}
@@ -530,7 +536,7 @@ function ActionArea({
   const thinking = view.thinkingSeat !== null ? session.seats[view.thinkingSeat]?.name : null;
   const folded = human >= 0 && hand?.players[human].folded;
   return (
-    <div className="flex h-[52px] items-center justify-center pb-1 text-sm text-gray-500">
+    <div className="flex h-14 items-center justify-center text-sm text-gray-500">
       {phase === 'starting' ? '카드를 섞는 중…' : folded ? '폴드했습니다 · 핸드 진행 중' : thinking ? `${thinking} 차례` : '…'}
     </div>
   );
@@ -561,17 +567,21 @@ function BetControls({ hand, onAct }: { hand: HandState; onAct: (a: Parameters<T
   const callIsAllIn = legal.canCall && legal.callAmount >= hand.players[hand.toAct].stack;
 
   return (
-    <div className="pb-1">
-      {raiseOpen && legal.canRaise && (
-        <div className="pop-in mb-2 rounded-xl border border-gray-800 bg-gray-900 p-2.5">
-          <div className="mb-1.5 flex items-center justify-between text-xs">
-            <span className="text-gray-400">{isBet ? '벳' : '레이즈'} 금액</span>
-            <Chips amount={amount} className="text-base" />
-          </div>
+    <div className="grid h-full min-h-0 grid-rows-[1fr_56px] gap-2">
+      <div
+        aria-hidden={!raiseOpen || !legal.canRaise}
+        className={cx('flex min-h-0 flex-col justify-between rounded-xl border border-gray-800 bg-gray-900 p-2.5', (!raiseOpen || !legal.canRaise) && 'invisible')}
+      >
+        <div className="mb-1.5 flex items-center justify-between text-xs">
+          <span className="text-gray-400">{isBet ? '벳' : '레이즈'} 금액</span>
+          <Chips amount={amount} className="text-base" />
+        </div>
+        <div className="h-5 shrink-0">
           {legal.maxRaiseTo > legal.minRaiseTo && (
             <input
               type="range"
               className="w-full"
+              aria-label="레이즈 금액"
               min={legal.minRaiseTo}
               max={legal.maxRaiseTo}
               step={bb}
@@ -583,23 +593,23 @@ function BetControls({ hand, onAct }: { hand: HandState; onAct: (a: Parameters<T
               }}
             />
           )}
-          <div className="mt-1.5 grid grid-cols-4 gap-1.5">
-            {presets.map((p) => (
-              <button
-                key={p.label}
-                onClick={() => setAmount(p.value)}
-                className={cx(
-                  'rounded-lg border py-1.5 text-xs font-bold',
-                  amount === p.value ? 'border-yellow-400 text-yellow-300' : 'border-gray-700 text-gray-300',
-                )}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
         </div>
-      )}
-      <div className="grid grid-cols-3 gap-2">
+        <div className="mt-1.5 grid grid-cols-4 gap-1.5">
+          {presets.map((p) => (
+            <button
+              key={p.label}
+              onClick={() => setAmount(p.value)}
+              className={cx(
+                'rounded-lg border py-1.5 text-xs font-bold',
+                amount === p.value ? 'border-yellow-400 text-yellow-300' : 'border-gray-700 text-gray-300',
+              )}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="grid h-14 grid-cols-3 gap-2">
         <button
           disabled={!legal.canFold}
           onClick={() => onAct({ type: 'fold' })}

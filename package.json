@@ -12,7 +12,8 @@
     "typecheck": "tsc -p .",
     "simulate": "tsx tools/simulate.ts",
     "android:sync": "npm run build && cap sync android",
-    "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug"
+    "android:apk": "npm run android:sync && cd android && .\\gradlew.bat assembleDebug",
+    "android:release": "powershell -NoProfile -File tools/build-release.ps1"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.2",

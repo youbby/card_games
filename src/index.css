@@ -39,6 +39,18 @@ textarea {
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 0.5rem);
 }
 
+/* Reserve betting controls even while the amount picker is closed or a CPU acts. */
+.table-actions {
+  height: 192px;
+  flex-shrink: 0;
+}
+
+@media (max-height: 700px) {
+  .table-actions {
+    height: 176px;
+  }
+}
+
 .felt {
   background: radial-gradient(ellipse at center, #1f5a35 0%, #0f3520 65%, #06190e 100%);
   border: 8px solid #3b2412;

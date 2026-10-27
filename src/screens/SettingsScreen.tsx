@@ -44,7 +44,7 @@ export function SettingsScreen() {
   return (
     <Page title="설정" onBack={back}>
       <Section title="시작 칩">
-        <p className="mb-2 text-[11px] text-gray-500">새 캐릭터를 만들 때만 적용됩니다. 기존 캐릭터와 CPU에는 영향이 없습니다.</p>
+        <p className="mb-2 text-[11px] text-gray-500">새 캐릭터를 만들 때만 적용됩니다. 기존 캐릭터와 상대 선수에는 영향이 없습니다.</p>
         <div className="grid grid-cols-3 gap-2">
           {STARTING_CHIPS_PRESETS.map((n) => (
             <Choice key={n} active={settings.startingChips === n} onClick={() => save({ startingChips: n })}>
@@ -93,7 +93,7 @@ export function SettingsScreen() {
             </Choice>
           ))}
         </div>
-        <div className="mb-1 mt-3 text-xs text-gray-400">CPU 생각 시간</div>
+        <div className="mb-1 mt-3 text-xs text-gray-400">상대 생각 시간</div>
         <div className="grid grid-cols-2 gap-2">
           <Choice active={settings.cpuThinkTime === 'NORMAL'} onClick={() => save({ cpuThinkTime: 'NORMAL' })}>
             보통
@@ -108,7 +108,7 @@ export function SettingsScreen() {
         <Button variant="danger" className="w-full" onClick={() => setResetStep(1)}>
           전체 초기화
         </Button>
-        <p className="mt-2 text-[11px] text-gray-500">모든 캐릭터, CPU, 전적, 설정을 지우고 설치 직후 상태로 되돌립니다.</p>
+        <p className="mt-2 text-[11px] text-gray-500">모든 캐릭터, 상대 선수, 전적, 설정을 지우고 설치 직후 상태로 되돌립니다.</p>
       </Section>
 
       <Section title="앱 정보">
@@ -123,7 +123,7 @@ export function SettingsScreen() {
           <h2 className="text-lg font-extrabold text-red-400">전체 초기화</h2>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-300">
             <li>모든 캐릭터와 칩</li>
-            <li>모든 CPU (새로 20명 생성)</li>
+            <li>모든 상대 선수 (새로 20명 생성)</li>
             <li>모든 전적·세션·핸드 기록</li>
             <li>설정 (기본값으로)</li>
           </ul>

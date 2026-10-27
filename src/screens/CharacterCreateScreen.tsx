@@ -60,11 +60,17 @@ export function CharacterCreateScreen({ reason }: { reason: CreateReason }) {
       <div className="mt-6 flex flex-col items-center gap-3">
         <Avatar emoji={avatar} size="lg" />
         <input
+          lang="ko"
+          type="text"
+          autoComplete="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          aria-label="캐릭터 이름"
           value={name}
           maxLength={NAME_MAX_LENGTH}
           onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && name.trim() && submit()}
-          placeholder="이름 (최대 12자)"
+          onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && !busy && name.trim() && submit()}
+          placeholder="이름 (한글·영문, 최대 12자)"
           className="w-full rounded-xl border border-gray-700 bg-gray-900 px-4 py-3 text-center text-lg font-bold outline-none focus:border-yellow-500"
         />
         {error && <div className="text-sm text-red-400">{error}</div>}

@@ -3,7 +3,7 @@ import { useApp } from '../app/store';
 import { db } from '../data/db';
 import type { CpuClass } from '../games/holdem/ai/types';
 import { listCpus } from '../services/cpuPool';
-import { Avatar, Chips, ClassBadge, cx, fmt, Page, personalityTags } from '../ui/components';
+import { Avatar, Chips, CLASS_LABEL, ClassBadge, cx, fmt, Page, personalityTags } from '../ui/components';
 import { useAsync } from '../ui/hooks';
 
 export function CpuListScreen() {
@@ -16,16 +16,16 @@ export function CpuListScreen() {
   }, [cls]);
 
   return (
-    <Page title="CPU 목록" onBack={back}>
+    <Page title="상대 선수" onBack={back}>
       <div className="grid grid-cols-2 gap-1 rounded-xl bg-gray-900 p-1 text-xs font-bold">
         {(['LOW', 'HIGH'] as CpuClass[]).map((c) => (
           <button key={c} onClick={() => setCls(c)} className={cx('rounded-lg py-2', cls === c ? 'bg-gray-700 text-white' : 'text-gray-400')}>
-            {c === 'LOW' ? 'Low' : 'High'}
+            {CLASS_LABEL[c]}
           </button>
         ))}
       </div>
       <p className="mt-3 text-[11px] leading-relaxed text-gray-500">
-        클래스마다 항상 10명이 대기합니다. 파산한 CPU는 사라지고 새 CPU가 들어옵니다.
+        난이도마다 10명의 상대 선수가 대기합니다. 파산한 선수의 자리는 새로운 선수가 채웁니다.
       </p>
       <div className="mt-3 space-y-2">
         {data?.map(({ cpu, stats }) => (

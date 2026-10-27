@@ -120,6 +120,7 @@ describe('sessions', () => {
 
   it('rejects stakes outside the class range and unaffordable buy-ins', async () => {
     const p = await createPlayer('하나');
+    await expect(openTable(p.id, 'LOW', 3, 'MID', 2_000)).rejects.toThrow('클래스');
     await expect(openTable(p.id, 'LOW', 3, 'HIGH', 4_000)).rejects.toThrow();
     await expect(openTable(p.id, 'HIGH', 3, 'ENTRY', 400)).rejects.toThrow();
     await expect(openTable(p.id, 'HIGH', 3, 'VIP', 20_000)).rejects.toThrow('잔액');
