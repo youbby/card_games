@@ -1,6 +1,7 @@
 import { db, newId } from '../data/db';
 import { AVATARS } from '../data/names';
 import { type Character, DEFAULT_SETTINGS, type Settings, type Stats } from '../data/types';
+import type { GameId } from '../games/catalog';
 
 export function emptyStats(characterId: string): Stats {
   return {
@@ -17,19 +18,31 @@ export function emptyStats(characterId: string): Stats {
     byClass: {},
     byStake: {},
     bySeatCount: {},
+    byGame: {},
     sessions: 0,
     playTimeMs: 0,
   };
 }
 
 export async function getSettings(): Promise<Settings> {
-  return (await db.settings.get('app')) ?? { ...DEFAULT_SETTINGS };
+  const saved = await db.settings.get('app');
+  return { ...DEFAULT_SETTINGS, ...saved, profitLimits: { ...DEFAULT_SETTINGS.profitLimits, ...saved?.profitLimits } };
 }
 
 export async function updateSettings(patch: Partial<Omit<Settings, 'id'>>): Promise<Settings> {
   const next = { ...(await getSettings()), ...patch, id: 'app' as const };
+  if (Object.values(next.profitLimits).some((value) => value !== null && (!Number.isInteger(value) || value < 1 || value > 100))) {
+    throw new Error('수익 한도는 1~100배 또는 제한 없음으로 설정하세요.');
+  }
   await db.settings.put(next);
   return next;
+}
+
+export async function updateProfitLimit(gameId: GameId, multiplier: number | null): Promise<Settings> {
+  return db.transaction('rw', db.settings, async () => {
+    const settings = await getSettings();
+    return updateSettings({ profitLimits: { ...settings.profitLimits, [gameId]: multiplier } });
+  });
 }
 
 export async function listPlayers(): Promise<Character[]> {

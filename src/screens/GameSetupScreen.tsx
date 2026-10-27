@@ -9,14 +9,15 @@ import { pickOpponents } from '../services/cpuPool';
 import { stakeAvailability, startSession } from '../services/session';
 import { Avatar, Button, Chips, ClassBadge, cx, fmt, Page, personalityTags, Section } from '../ui/components';
 import { useAsync } from '../ui/hooks';
+import { gameName, type PokerGameId } from '../games/catalog';
 
 const CLASS_INFO: Record<CpuClass, { title: string; desc: string }> = {
   LOW: { title: '하수', desc: '실수가 많은 초보 상대 · 입문~일반' },
   HIGH: { title: '고수', desc: '확률과 성향을 읽는 상대 · 중급~VIP' },
 };
 
-export function GameSetupScreen() {
-  const { playerId, back, push, showToast } = useApp();
+export function GameSetupScreen({ gameId = 'holdem' }: { gameId?: PokerGameId }) {
+  const { playerId, back, push, showToast, settings } = useApp();
   const [cls, setCls] = useState<CpuClass>('LOW');
   const [seats, setSeats] = useState(4);
   const [stakeId, setStakeId] = useState<StakeId | null>(null);
@@ -87,6 +88,7 @@ export function GameSetupScreen() {
     setBusy(true);
     try {
       const session = await startSession({
+        gameId,
         playerId: player.id,
         cpuClass: cls,
         seatCount: seats,
@@ -105,7 +107,7 @@ export function GameSetupScreen() {
 
   return (
     <Page
-      title="텍사스 홀덤"
+      title={gameName(gameId)}
       onBack={back}
       right={player && <Chips amount={balance} className="text-sm" />}
       footer={
@@ -114,6 +116,10 @@ export function GameSetupScreen() {
         </Button>
       }
     >
+      <div className="mt-2 rounded-xl border border-gray-800 bg-gray-900 p-3 text-xs leading-relaxed text-gray-400">
+        {gameId === 'draw' && <p>5장 배분 → 베팅 → 0~5장 교환 → 마지막 베팅 → 족보 비교</p>}
+        <p>{settings.profitLimits[gameId] == null ? '방 수익 한도 없음' : `순이익이 입장금의 ${settings.profitLimits[gameId]}배 이상이면 정산 후 퇴장합니다. 마지막 판 당첨금은 전부 지급됩니다.`}</p>
+      </div>
       <Section title="① 상대 난이도">
         <div className="grid grid-cols-2 gap-2">
           {(['LOW', 'HIGH'] as CpuClass[]).map((c) => (

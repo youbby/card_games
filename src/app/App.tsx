@@ -7,6 +7,8 @@ import { LobbyScreen } from '../screens/LobbyScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { StatsScreen } from '../screens/StatsScreen';
 import { TableScreen } from '../screens/TableScreen';
+import { HouseScreen } from '../screens/HouseScreen';
+import { HouseSetupScreen } from '../screens/HouseSetupScreen';
 import { boot } from './boot';
 import { setUpNative } from './native';
 import { currentScreen, useApp } from './store';
@@ -41,10 +43,15 @@ export function App() {
       content = <LobbyScreen />;
       break;
     case 'setup':
-      content = <GameSetupScreen />;
+      content = screen.gameId === 'blackjack' || screen.gameId === 'baccarat'
+        ? <HouseSetupScreen gameId={screen.gameId} />
+        : <GameSetupScreen gameId={screen.gameId ?? 'holdem'} />;
       break;
     case 'table':
       content = <TableScreen key={screen.sessionId} sessionId={screen.sessionId} />;
+      break;
+    case 'house':
+      content = <HouseScreen key={screen.roomId} roomId={screen.roomId} />;
       break;
     case 'stats':
       content = <StatsScreen characterId={screen.characterId} />;

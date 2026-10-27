@@ -3,6 +3,8 @@ import { createRng, randomSeed, type Rng } from '../core/rng';
 import { db } from '../data/db';
 import type { Character, InProgressHand, TableSession } from '../data/types';
 import { botDecide } from '../games/holdem/ai';
+import { drawBotDecide } from '../games/draw/ai';
+import { reachedProfitLimit } from '../games/catalog';
 import { applyAction, startHand } from '../games/holdem/engine';
 import type { Action, ActionRecord, HandEvent, HandState } from '../games/holdem/types';
 import {
@@ -17,7 +19,7 @@ import {
   type TableNotice,
 } from './session';
 
-export type TablePhase = 'starting' | 'playing' | 'handOver' | 'needRebuy' | 'noOpponents' | 'ended';
+export type TablePhase = 'starting' | 'playing' | 'handOver' | 'profitLimit' | 'needRebuy' | 'noOpponents' | 'ended';
 
 export interface LogEntry {
   id: number;
@@ -53,6 +55,8 @@ export function formatCard(c: Card): string {
 export function actionLabel(r: ActionRecord): string {
   const n = r.to.toLocaleString();
   switch (r.kind) {
+    case 'draw':
+      return `${r.to}장 교환`;
     case 'sb':
       return `SB ${n}`;
     case 'bb':
@@ -70,7 +74,7 @@ export function actionLabel(r: ActionRecord): string {
   }
 }
 
-const STREET_KO = { PREFLOP: '프리플랍', FLOP: '플랍', TURN: '턴', RIVER: '리버', SHOWDOWN: '쇼다운' } as const;
+const STREET_KO = { PREFLOP: '프리플랍', DRAW: '카드 교환', FLOP: '플랍', TURN: '턴', RIVER: '리버', SHOWDOWN: '쇼다운' } as const;
 
 export class TableRunner {
   private session: TableSession;
@@ -143,7 +147,11 @@ export class TableRunner {
   }
 
   private async setUpHand(): Promise<void> {
-    if (this.disposed || this.phase === 'ended') return;
+    if (this.disposed || !['starting', 'handOver', 'needRebuy'].includes(this.phase) || (this.phase === 'starting' && this.hand)) return;
+    const seat = this.session.seats[0]!;
+    if (reachedProfitLimit(seat.stack, this.session.initialBuyIn ?? seat.buyInTotal, seat.buyInTotal, this.session.profitMultiplier)) {
+      this.phase = 'profitLimit'; this.emit(); return;
+    }
     this.phase = 'starting';
     this.seatLabels = {};
     this.hand = null;
@@ -177,6 +185,7 @@ export class TableRunner {
     const buttonSeat = nextButton(this.session);
     const seed = randomSeed();
     const step = startHand({
+      variant: this.session.gameId,
       players: inPlay.map(({ record }) => ({ id: record.characterId, name: record.name, stack: record.stack })),
       button: inPlay.findIndex((s) => s.seat === buttonSeat),
       sb: this.session.sb,
@@ -205,11 +214,15 @@ export class TableRunner {
         const label = actionLabel(e.record);
         this.seatLabels = { ...this.seatLabels, [seat]: label };
         this.addLog(`${hand.players[e.record.player].name}: ${label}`, seat === 0 ? 'mine' : 'action');
+      } else if (e.type === 'draw') {
+        this.seatLabels = { ...this.seatLabels, [this.seatOfPlayer[e.player]]: `${e.count}장 교환` };
+        this.addLog(`${hand.players[e.player].name}: ${e.count}장 교환`, 'action');
       } else if (e.type === 'street') {
         this.seatLabels = Object.fromEntries(
           Object.entries(this.seatLabels).filter(([, l]) => l === '폴드' || l.startsWith('올인')),
         );
-        this.addLog(`${STREET_KO[e.street]}: ${e.cards.map(formatCard).join(' ')}`, 'street');
+        const streetLabel = this.session.gameId === 'draw' && e.street === 'RIVER' ? '마지막 베팅' : STREET_KO[e.street];
+        this.addLog(`${streetLabel}${e.cards.length ? ': ' + e.cards.map(formatCard).join(' ') : ''}`, 'street');
       } else if (e.type === 'end') {
         const r = e.result;
         if (r.showdown) {
@@ -263,11 +276,14 @@ export class TableRunner {
       const id = hand.players[hand.toAct].id;
       const cpu = this.personalities.get(id);
       const human = this.seatOfPlayer.indexOf(0);
-      const action = botDecide(cpu?.cpuClass ?? this.session.cpuClass, hand, {
+      const context = {
         personality: cpu?.personality ?? { tightness: 0.5, aggression: 0.5, bluff: 0.2 },
         rng: this.rng,
         human: human >= 0 ? { index: human, model: this.session.opponentModel } : undefined,
-      });
+      };
+      const action = this.session.gameId === 'draw'
+        ? drawBotDecide(hand, context, this.session.cpuClass === 'HIGH')
+        : botDecide(cpu?.cpuClass ?? this.session.cpuClass, hand, context);
       this.apply(action);
     }, this.opts.thinkMs());
   }
@@ -299,7 +315,8 @@ export class TableRunner {
       seed: this.inProgress?.seed ?? 0,
     });
     this.inProgress = undefined;
-    this.phase = 'handOver';
+    const seat = this.session.seats[0]!;
+    this.phase = reachedProfitLimit(seat.stack, this.session.initialBuyIn ?? seat.buyInTotal, seat.buyInTotal, this.session.profitMultiplier) ? 'profitLimit' : 'handOver';
     this.emit();
   }
 

@@ -9,6 +9,8 @@
 
 ## 문서 목록
 
+추가 게임과 게임별 수익 한도는 [08-additional-games.md](08-additional-games.md)에 정리되어 있습니다.
+
 | 문서 | 내용 |
 |---|---|
 | [01-product-spec.md](01-product-spec.md) | 제품 범위, 화면 흐름, 캐릭터·CPU 풀·게임 시작·설정·초기화 |

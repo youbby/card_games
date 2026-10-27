@@ -7,6 +7,7 @@ import { STAKES } from '../games/holdem/stakes';
 import { getCharacter, getStats } from '../services/characters';
 import { Avatar, Chips, ClassBadge, cx, fmt, Page, PlayingCard, Section } from '../ui/components';
 import { useAsync } from '../ui/hooks';
+import { GAMES, gameName } from '../games/catalog';
 
 const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '-');
 const signed = (n: number) => `${n > 0 ? '+' : ''}${fmt(n)}`;
@@ -16,13 +17,18 @@ export function StatsScreen({ characterId }: { characterId: string }) {
   const back = useApp((s) => s.back);
   const [tab, setTab] = useState<'summary' | 'sessions' | 'hands'>('summary');
   const { data } = useAsync(async () => {
-    const [character, stats, sessions, hands] = await Promise.all([
+    const [character, stats, sessions, hands, rooms] = await Promise.all([
       getCharacter(characterId),
       getStats(characterId),
       db.sessions.where('playerId').equals(characterId).toArray(),
       db.hands.where('[playerId+playedAt]').between([characterId, 0], [characterId, Infinity]).reverse().limit(100).toArray(),
+      db.rooms.where('playerId').equals(characterId).toArray(),
     ]);
-    return { character, stats, sessions: sessions.filter((s) => !s.active).sort((a, b) => b.startedAt - a.startedAt), hands };
+    const history = [
+      ...sessions.filter((s) => !s.active).map((s) => ({ id: s.id, gameId: s.gameId, cpuClass: s.cpuClass, stakeId: s.stakeId, seatCount: s.seatCount, startedAt: s.startedAt, handsPlayed: s.handsPlayed, buyIn: s.seats[0]?.buyInTotal ?? 0, net: (s.seats[0]?.stack ?? 0) - (s.seats[0]?.buyInTotal ?? 0) })),
+      ...rooms.filter((r) => !r.active).map((r) => ({ id: r.id, gameId: r.gameId, cpuClass: r.cpuClass, stakeId: r.stakeId, seatCount: 2, startedAt: r.startedAt, handsPlayed: r.roundsPlayed, buyIn: r.initialBuyIn, net: r.balance - r.initialBuyIn })),
+    ].sort((a, b) => b.startedAt - a.startedAt);
+    return { character, stats, sessions: history, hands };
   }, [characterId]);
 
   if (!data?.character) return <Page title="전적" onBack={back}>{null}</Page>;
@@ -67,8 +73,8 @@ export function StatsScreen({ characterId }: { characterId: string }) {
             <Tile label="최대 획득 팟" value={fmt(s.biggestPotWon)} />
             <Tile label="최대 손실" value={fmt(s.biggestLoss)} />
             <Tile label="플레이 시간" value={`${Math.round(s.playTimeMs / 60000)}분`} />
-            <Tile label="VPIP" value={pct(s.vpipCount, s.handsPlayed)} />
-            <Tile label="PFR" value={pct(s.pfrCount, s.handsPlayed)} />
+            <Tile label="홀덤 VPIP" value={pct(s.vpipCount, s.byGame?.holdem?.hands ?? s.handsPlayed)} />
+            <Tile label="홀덤 PFR" value={pct(s.pfrCount, s.byGame?.holdem?.hands ?? s.handsPlayed)} />
             <Tile label="쇼다운 승률" value={pct(s.showdownsWon, s.showdowns)} />
           </div>
 
@@ -88,7 +94,10 @@ export function StatsScreen({ characterId }: { characterId: string }) {
             </Section>
           )}
 
-          <Section title="클래스별">
+          <Section title="게임별">
+            <BucketTable rows={GAMES.map((game) => ({ label: game.name, bucket: s.byGame?.[game.id] }))} />
+          </Section>
+          <Section title="포커 클래스별">
             <BucketTable
               rows={(['LOW', 'HIGH'] as const).map((k) => ({ label: <ClassBadge cls={k} />, bucket: s.byClass[k] }))}
             />
@@ -106,19 +115,19 @@ export function StatsScreen({ characterId }: { characterId: string }) {
         <div className="mt-4 space-y-2">
           {sessions.length === 0 && <Empty text="아직 세션 기록이 없습니다." />}
           {sessions.map((x) => {
-            const seat = x.seats[0];
-            const net = seat ? seat.stack - seat.buyInTotal : 0;
+            const net = x.net;
             const stake = STAKES.find((st) => st.id === x.stakeId)!;
             return (
               <div key={x.id} className="rounded-xl border border-gray-800 bg-gray-900 p-3">
                 <div className="flex items-center gap-2 text-sm">
                   <ClassBadge cls={x.cpuClass} />
+                  <span className="text-xs text-gray-300">{gameName(x.gameId)}</span>
                   <span className="font-bold">{stake.name}</span>
                   <span className="text-gray-500">{x.seatCount}인</span>
                   <span className={cx('ml-auto font-extrabold tabular-nums', tone(net))}>{signed(net)}</span>
                 </div>
                 <div className="mt-1 text-[11px] text-gray-500">
-                  {new Date(x.startedAt).toLocaleString('ko-KR')} · {x.handsPlayed}핸드 · 바이인 {fmt(seat?.buyInTotal ?? 0)}
+                  {new Date(x.startedAt).toLocaleString('ko-KR')} · {x.handsPlayed}판 · 입장금 {fmt(x.buyIn)}
                 </div>
               </div>
             );
@@ -166,18 +175,19 @@ function HandRow({ h }: { h: HandRecord }) {
   const [open, setOpen] = useState(false);
   return (
     <button className="w-full rounded-xl border border-gray-800 bg-gray-900 p-2.5 text-left" onClick={() => setOpen((v) => !v)}>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="flex gap-0.5">
-          {h.holeCards.length ? h.holeCards.map((t) => <PlayingCard key={t} card={cardFromString(t)} size="xs" />) : <span className="text-xs text-gray-500">-</span>}
+          {h.holeCards.length ? h.holeCards.map((t, i) => <PlayingCard key={i} card={cardFromString(t)} size="xs" />) : <span className="text-xs text-gray-500">-</span>}
         </div>
         <div className="flex gap-0.5">
-          {h.board.map((t) => (
-            <PlayingCard key={t} card={cardFromString(t)} size="xs" />
+          {h.board.map((t, i) => (
+            <PlayingCard key={i} card={cardFromString(t)} size="xs" />
           ))}
         </div>
         <span className={cx('ml-auto text-sm font-extrabold tabular-nums', tone(h.net))}>{signed(h.net)}</span>
       </div>
       <div className="mt-1 flex gap-2 text-[11px] text-gray-500">
+        <span>{gameName(h.gameId)}</span>
         <span>{h.position}</span>
         <span>팟 {fmt(h.potTotal)}</span>
         {h.bestHand && <span className="text-emerald-400">{h.bestHand.name}</span>}
@@ -188,6 +198,7 @@ function HandRow({ h }: { h: HandRecord }) {
         <div className="mt-2 space-y-0.5 border-t border-gray-800 pt-2 text-[11px] text-gray-400">
           <div>상대: {h.opponents.map((o) => o.name).join(', ')}</div>
           {h.actions.map((a, i) => {
+            if (h.gameId === 'blackjack' || h.gameId === 'baccarat') return <div key={i}>{a}</div>;
             const [street, name, kind, to] = a.split(':');
             return (
               <div key={i}>
@@ -203,8 +214,8 @@ function HandRow({ h }: { h: HandRecord }) {
   );
 }
 
-const STREET_KO: Record<string, string> = { PREFLOP: '프리플랍', FLOP: '플랍', TURN: '턴', RIVER: '리버' };
-const KIND_KO: Record<string, string> = { sb: 'SB', bb: 'BB', fold: '폴드', check: '체크', call: '콜', bet: '벳', raise: '레이즈' };
+const STREET_KO: Record<string, string> = { PREFLOP: '프리플랍', DRAW: '카드 교환', FLOP: '플랍', TURN: '턴', RIVER: '리버' };
+const KIND_KO: Record<string, string> = { sb: 'SB', bb: 'BB', fold: '폴드', check: '체크', call: '콜', bet: '벳', raise: '레이즈', draw: '교환' };
 
 function Empty({ text }: { text: string }) {
   return <div className="py-10 text-center text-sm text-gray-600">{text}</div>;

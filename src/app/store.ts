@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { DEFAULT_SETTINGS, type Settings } from '../data/types';
+import type { GameId } from '../games/catalog';
 
 export type CreateReason = 'first' | 'allBankrupt' | 'new';
 
@@ -8,8 +9,9 @@ export type Screen =
   | { name: 'characterSelect' }
   | { name: 'characterCreate'; reason: CreateReason }
   | { name: 'lobby' }
-  | { name: 'setup' }
+  | { name: 'setup'; gameId?: GameId }
   | { name: 'table'; sessionId: string }
+  | { name: 'house'; roomId: string }
   | { name: 'stats'; characterId: string }
   | { name: 'cpus' }
   | { name: 'settings' };

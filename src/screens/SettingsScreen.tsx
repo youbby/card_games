@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { startScreen } from '../app/boot';
 import { useApp } from '../app/store';
 import { type AnimationSpeed, type Settings, STARTING_CHIPS_MAX, STARTING_CHIPS_MIN, STARTING_CHIPS_PRESETS } from '../data/types';
-import { getSettings, updateSettings } from '../services/characters';
+import { getSettings, updateSettings, updateProfitLimit } from '../services/characters';
 import { factoryReset } from '../services/factoryReset';
 import { Button, cx, fmt, Modal, Page, Section } from '../ui/components';
+import { GAMES } from '../games/catalog';
 
 const RESET_WORD = '초기화';
 
@@ -68,6 +69,21 @@ export function SettingsScreen() {
           <Button className="py-2" disabled={!custom} onClick={applyCustom}>
             적용
           </Button>
+        </div>
+      </Section>
+
+      <Section title="게임별 방 수익 한도">
+        <p className="mb-3 text-xs leading-relaxed text-gray-400">입장금 대비 순이익 기준입니다. 5배는 1,000칩 입장 시 정산 잔액 6,000칩 이상입니다. 당첨금을 모두 지급하고 다음 판을 막으며, 재입장하면 새로 계산합니다. 변경한 설정은 다음 입장부터 적용됩니다.</p>
+        <div className="space-y-3">
+          {GAMES.map((game) => (
+            <label key={game.id} className="flex items-center justify-between gap-2 rounded-xl border border-gray-800 bg-gray-900 p-3 text-sm">
+              <span>{game.name}</span>
+              <select aria-label={`${game.name} 수익 한도`} value={settings.profitLimits[game.id] ?? 'none'} className="rounded-lg border border-gray-700 bg-gray-950 px-2 py-2 text-yellow-300" onChange={(event) => void updateProfitLimit(game.id, event.target.value === 'none' ? null : Number(event.target.value)).then(setSettings).catch((error: unknown) => showToast(String(error)))}>
+                <option value="none">제한 없음</option>
+                {[1, 2, 3, 5, 10, 20, 50, 100].map((value) => <option key={value} value={value}>순이익 {value}배</option>)}
+              </select>
+            </label>
+          ))}
         </div>
       </Section>
 

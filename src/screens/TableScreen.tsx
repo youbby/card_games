@@ -14,6 +14,7 @@ import type { HandState, PlayerState } from '../games/holdem/types';
 import { TableRunner, type TableView } from '../services/tableRunner';
 import { Button, Chips, ClassBadge, ConfirmModal, cx, EmptyCardSlot, fmt, Modal, PlayingCard } from '../ui/components';
 import { useBackButton } from '../ui/hooks';
+import { gameName, profitTarget } from '../games/catalog';
 
 type Pos = { top: string; left: string };
 
@@ -67,6 +68,7 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [balance, setBalance] = useState(0);
+  const [drawSelection, setDrawSelection] = useState<number[]>([]);
   const runnerRef = useRef<TableRunner | null>(null);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -99,6 +101,7 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
   }, [playerId, phase]);
 
   useFeedback(view, settings);
+  useEffect(() => { setDrawSelection([]); }, [view?.hand?.street, view?.session.handsPlayed]);
 
   const leave = async () => {
     setConfirmLeave(false);
@@ -139,6 +142,10 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
         </div>
         <div className="rounded-lg bg-gray-900 px-2 py-1.5 text-[11px] tabular-nums text-gray-400">#{session.handsPlayed + (handLive ? 1 : 0)}</div>
       </header>
+      <div className="flex shrink-0 items-center justify-between gap-2 px-3 pb-2 text-[10px] text-gray-500">
+        <span>{gameName(session.gameId)}</span>
+        <span>{session.profitMultiplier == null ? '수익 한도 없음' : `순이익 ${session.profitMultiplier}배 · 목표 ${fmt(profitTarget(session.initialBuyIn ?? session.seats[0]!.buyInTotal, session.seats[0]!.buyInTotal, session.profitMultiplier)!)}칩`}</span>
+      </div>
 
       {/* Table */}
       <div data-testid="table-board" className="relative mx-2 min-h-0 flex-1">
@@ -162,10 +169,10 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
             />
           );
         })}
-        <div className={cx('absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2', session.seatCount >= 4 ? 'top-[52%]' : 'top-[42%]')}>
+        <div className={cx('absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2', session.gameId === 'draw' ? 'top-[60%]' : 'top-[52%]')}>
           <PotView hand={hand} />
-          <div data-testid="community-cards" className="flex gap-1">
-            {Array.from({ length: 5 }, (_, i) =>
+          <div data-testid="community-cards" className="flex min-h-14 gap-1">
+            {session.gameId === 'draw' ? <div className="flex w-44 items-center justify-center text-center text-xs text-emerald-100/60">{hand?.street === 'DRAW' ? '카드 교환 중' : result ? '쇼다운' : '비공개 카드 5장 · 교환 1회'}</div> : Array.from({ length: 5 }, (_, i) =>
               hand && hand.board[i] !== undefined ? (
                 <PlayingCard
                   key={`${i}-${hand.board[i]}`}
@@ -198,6 +205,8 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
           turn={view.humanTurn}
           isWinner={human >= 0 && winners.has(human)}
           highlight={highlight}
+          drawSelection={drawSelection}
+          onToggleDraw={view.humanTurn && hand?.street === 'DRAW' ? (index) => setDrawSelection((selected) => selected.includes(index) ? selected.filter((i) => i !== index) : [...selected, index]) : undefined}
         />
       </div>
 
@@ -207,6 +216,7 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
           <ActionArea
             view={view}
             balance={balance}
+            drawSelection={drawSelection}
             onAct={(a) => runnerRef.current?.humanAct(a)}
             onNext={() => void runnerRef.current?.startNextHand()}
             onRebuy={(amount) =>
@@ -372,10 +382,10 @@ function OpponentSeat({
           (player?.folded || !player) && 'opacity-45',
         )}
       >
-        <div className="flex h-9 items-center -space-x-2">
+        <div className={cx('flex h-9 items-center', hand?.variant === 'draw' ? '-space-x-0.5' : '-space-x-2')}>
           {player && !player.folded ? (
             player.hole.length ? (
-              player.hole.map((c, k) => <PlayingCard key={k} card={c} size="xs" faceDown={!reveal} highlight={reveal && highlight.has(c)} />)
+              player.hole.map((c, k) => <PlayingCard key={k} card={c} size={hand?.variant === 'draw' ? 'drawOpponent' : 'xs'} faceDown={!reveal} highlight={reveal && highlight.has(c)} />)
             ) : (
               <>
                 <PlayingCard size="xs" faceDown />
@@ -417,6 +427,8 @@ function MySeat({
   turn,
   isWinner,
   highlight,
+  drawSelection = [],
+  onToggleDraw,
 }: {
   record: SeatRecord;
   player: PlayerState | null;
@@ -426,10 +438,12 @@ function MySeat({
   turn: boolean;
   isWinner: boolean;
   highlight: Set<Card>;
+  drawSelection?: number[];
+  onToggleDraw?: (index: number) => void;
 }) {
   const handName = useMemo(() => {
     if (!player || !hand || player.hole.length < 2) return '';
-    if (hand.board.length < 3) return preflopLabel(player.hole);
+    if (hand.variant !== 'draw' && hand.board.length < 3) return preflopLabel(player.hole);
     return evaluate([...player.hole, ...hand.board], false).name;
   }, [player, hand]);
   return (
@@ -445,13 +459,10 @@ function MySeat({
       <div className="flex gap-1">
         {player?.hole.length ? (
           player.hole.map((c, k) => (
-            <PlayingCard
-              key={k}
-              card={c}
-              size="lg"
-              dim={player.folded || (highlight.size > 0 && !highlight.has(c))}
-              highlight={highlight.has(c)}
-            />
+            <button key={k} disabled={!onToggleDraw} onClick={() => onToggleDraw?.(k)} aria-label={`카드 ${k + 1} 교환 선택`} aria-pressed={drawSelection.includes(k)} className={cx('relative rounded-lg', drawSelection.includes(k) && 'outline-2 outline-offset-2 outline-yellow-400')}>
+              <PlayingCard card={c} size={hand?.variant === 'draw' ? 'board' : 'lg'} dim={player.folded || (highlight.size > 0 && !highlight.has(c))} highlight={highlight.has(c)} />
+              {drawSelection.includes(k) && <span className="absolute inset-x-0 bottom-0 rounded-b-md bg-yellow-400 py-0.5 text-[9px] font-bold text-black">교환</span>}
+            </button>
           ))
         ) : (
           <>
@@ -528,6 +539,7 @@ function ActionArea({
   onNext,
   onRebuy,
   onLeave,
+  drawSelection,
 }: {
   view: TableView;
   balance: number;
@@ -535,10 +547,18 @@ function ActionArea({
   onNext: () => void;
   onRebuy: (amount: number) => void;
   onLeave: () => void;
+  drawSelection: number[];
 }) {
   const { hand, phase, session } = view;
   const stake = stakeById(session.stakeId);
   const human = view.seatOfPlayer.indexOf(0);
+  if (phase === 'profitLimit') return (
+    <div className="space-y-3 pb-1 text-center">
+      <p className="font-bold text-yellow-300">이번 방의 수익 목표를 달성했습니다!</p>
+      <p className="text-xs text-gray-400">당첨금은 전부 정산되었습니다. 나갔다가 새 방에 입장해 주세요.</p>
+      <Button className="w-full" variant="primary" onClick={onLeave}>정산하고 나가기</Button>
+    </div>
+  );
 
   if (phase === 'needRebuy') {
     return <RebuyPanel balance={balance} stake={stake} stack={session.seats[0]!.stack} onRebuy={onRebuy} onLeave={onLeave} />;
@@ -567,6 +587,12 @@ function ActionArea({
       </div>
     );
   }
+  if (view.humanTurn && hand?.street === 'DRAW') return (
+    <div className="space-y-3 pb-1 text-center">
+      <p className="text-sm text-gray-300">내 카드에서 교환할 카드를 누르세요 (0~5장).</p>
+      <Button className="w-full" variant="primary" onClick={() => onAct({ type: 'draw', indices: drawSelection })}>{drawSelection.length ? `${drawSelection.length}장 교환` : '모두 유지'}</Button>
+    </div>
+  );
   if (view.humanTurn && hand) return <BetControls hand={hand} onAct={onAct} />;
 
   const thinking = view.thinkingSeat !== null ? session.seats[view.thinkingSeat]?.name : null;

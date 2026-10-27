@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type { Character, HandRecord, Settings, Stats, TableSession } from './types';
+import type { HouseRoom } from '../games/house/types';
 
 export class CardGamesDb extends Dexie {
   characters!: EntityTable<Character, 'id'>;
@@ -7,6 +8,7 @@ export class CardGamesDb extends Dexie {
   hands!: EntityTable<HandRecord, 'id'>;
   stats!: EntityTable<Stats, 'characterId'>;
   settings!: EntityTable<Settings, 'id'>;
+  rooms!: EntityTable<HouseRoom, 'id'>;
 
   constructor(name = 'card-games') {
     super(name);
@@ -16,6 +18,11 @@ export class CardGamesDb extends Dexie {
       hands: 'id, playerId, sessionId, [playerId+playedAt]',
       stats: 'characterId',
       settings: 'id',
+    });
+    this.version(2).stores({ rooms: 'id, playerId, active, gameId' }).upgrade(async (tx) => {
+      await tx.table('stats').toCollection().modify((stats: Stats) => {
+        stats.byGame ??= { holdem: { hands: stats.handsPlayed, net: stats.netProfit } };
+      });
     });
   }
 }

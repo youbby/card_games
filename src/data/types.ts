@@ -1,5 +1,6 @@
 import type { CpuClass, OpponentModel, Personality } from '../games/holdem/ai/types';
 import type { StakeId } from '../games/holdem/stakes';
+import type { GameId, PokerGameId } from '../games/catalog';
 
 export type CharacterKind = 'PLAYER' | 'CPU';
 export type CharacterStatus = 'ACTIVE' | 'BANKRUPT';
@@ -43,7 +44,9 @@ export interface InProgressHand {
 export interface TableSession {
   id: string;
   playerId: string;
-  gameId: 'holdem';
+  gameId: PokerGameId;
+  initialBuyIn?: number;
+  profitMultiplier?: number | null;
   cpuClass: CpuClass;
   seatCount: number;
   stakeId: StakeId;
@@ -63,6 +66,7 @@ export interface TableSession {
 }
 
 export interface HandRecord {
+  gameId?: GameId;
   id: string;
   playerId: string;
   sessionId: string;
@@ -94,6 +98,7 @@ export interface Bucket {
 }
 
 export interface Stats {
+  byGame?: Partial<Record<GameId, Bucket>>;
   characterId: string;
   handsPlayed: number;
   handsWon: number;
@@ -115,6 +120,7 @@ export interface Stats {
 export type AnimationSpeed = 'SLOW' | 'NORMAL' | 'FAST';
 
 export interface Settings {
+  profitLimits: Record<GameId, number | null>;
   id: 'app';
   startingChips: number;
   sound: boolean;
@@ -125,6 +131,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  profitLimits: { holdem: 5, draw: 5, baccarat: 5, blackjack: 5 },
   id: 'app',
   startingChips: 10_000,
   sound: true,

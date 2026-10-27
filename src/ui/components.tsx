@@ -167,6 +167,7 @@ export function Avatar({ emoji, size = 'md', dim }: { emoji: string; size?: 'sm'
 }
 
 const CARD_SIZES = {
+  drawOpponent: 'h-8 w-[14px] text-[8px] rounded-sm',
   xs: 'h-9 w-[26px] text-[10px] rounded',
   sm: 'h-12 w-[34px] text-xs rounded-md',
   board: 'h-14 w-10 text-sm rounded-md max-[380px]:h-[50px] max-[380px]:w-8 max-[380px]:text-xs',

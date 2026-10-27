@@ -3,8 +3,8 @@ import { useApp } from '../app/store';
 import { getCharacter, getStats } from '../services/characters';
 import { Avatar, Chips, Page, Section } from '../ui/components';
 import { useAsync } from '../ui/hooks';
+import { GAMES } from '../games/catalog';
 
-const GAMES = [{ id: 'holdem', name: '텍사스 홀덤', subtitle: 'No-Limit · 2~6인', icon: '♠️', available: true }];
 
 export function LobbyScreen() {
   const { playerId, push, back } = useApp();
@@ -52,7 +52,7 @@ export function LobbyScreen() {
           {GAMES.map((g) => (
             <button
               key={g.id}
-              onClick={() => push({ name: 'setup' })}
+              onClick={() => push({ name: 'setup', gameId: g.id })}
               className="flex w-full items-center gap-3 rounded-2xl border border-emerald-700/40 bg-gradient-to-r from-emerald-950 to-gray-900 p-4 text-left active:opacity-80"
             >
               <div className="text-4xl">{g.icon}</div>
@@ -63,9 +63,6 @@ export function LobbyScreen() {
               <ChevronRight className="h-5 w-5 text-gray-500" />
             </button>
           ))}
-          <div className="rounded-2xl border border-dashed border-gray-800 p-4 text-center text-xs text-gray-600">
-            다른 게임은 준비 중입니다
-          </div>
         </div>
       </Section>
 

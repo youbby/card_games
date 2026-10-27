@@ -1,6 +1,6 @@
 import { type Card, fullDeck } from '../../core/cards';
 import { evaluate, type HandValue } from '../../core/evaluator';
-import { type Rng, shuffle } from '../../core/rng';
+import { createRng, type Rng, shuffle } from '../../core/rng';
 import { buildPots, splitPot } from './pots';
 import type {
   Action,
@@ -15,6 +15,7 @@ import type {
 } from './types';
 
 export interface StartHandInput {
+  variant?: 'holdem' | 'draw';
   /** Players dealt in, in seat order around the table. Every stack must be > 0. */
   players: SeatInput[];
   /** Index into `players` of the dealer button. */
@@ -40,6 +41,8 @@ function cloneState(s: HandState): HandState {
     deck: [...s.deck],
     board: [...s.board],
     actions: [...s.actions],
+    discards: s.discards ? [...s.discards] : undefined,
+    drawDone: s.drawDone ? [...s.drawDone] : undefined,
   };
 }
 
@@ -105,11 +108,14 @@ export function startHand(input: StartHandInput): Step {
     allIn: false,
     hasActed: false,
   }));
-  for (let round = 0; round < 2; round++) {
+  for (let round = 0; round < (input.variant === 'draw' ? 5 : 2); round++) {
     for (let k = 0; k < n; k++) players[(sbIndex + k) % n].hole.push(deck.pop()!);
   }
 
   const state: HandState = {
+    variant: input.variant ?? 'holdem',
+    discards: [],
+    drawSeed: rng.int(0x7fffffff),
     players,
     button,
     sbIndex,
@@ -155,7 +161,7 @@ export function legalActions(s: HandState): LegalActions {
     minRaiseTo: 0,
     maxRaiseTo: 0,
   };
-  if (s.toAct < 0 || s.result) return none;
+  if (s.toAct < 0 || s.result || s.street === 'DRAW') return none;
   const p = s.players[s.toAct];
   const owed = Math.max(0, s.currentBet - p.bet);
   const maxRaiseTo = p.bet + p.stack;
@@ -180,6 +186,8 @@ export function legalActions(s: HandState): LegalActions {
  */
 export function applyAction(prev: HandState, action: Action): Step {
   if (prev.toAct < 0 || prev.result) throw new Error('No player to act');
+  if (prev.street === 'DRAW') return applyDraw(prev, action);
+  if (action.type === 'draw') throw new Error('지금은 카드를 교환할 수 없습니다.');
   const s = cloneState(prev);
   const events: HandEvent[] = [];
   const index = s.toAct;
@@ -253,6 +261,14 @@ function dealStreet(s: HandState, street: Street, events: HandEvent[]) {
 }
 
 function endRound(s: HandState, events: HandEvent[]) {
+  if (s.variant === 'draw') {
+    if (s.street !== 'PREFLOP') { showdown(s, events); return; }
+    s.street = 'DRAW';
+    s.drawDone = s.players.map((player) => player.folded);
+    s.toAct = nextDrawer(s, s.button + 1);
+    events.push({ type: 'street', street: 'DRAW', cards: [] });
+    return;
+  }
   for (;;) {
     const next = NEXT_STREET[s.street];
     if (!next) {
@@ -273,6 +289,44 @@ function endRound(s: HandState, events: HandEvent[]) {
     s.toAct = findNextToAct(s, s.button + 1);
     if (s.toAct >= 0) return;
   }
+}
+
+function nextDrawer(s: HandState, from: number): number {
+  for (let offset = 0; offset < s.players.length; offset++) {
+    const index = (from + offset) % s.players.length;
+    if (!s.drawDone![index]) return index;
+  }
+  return -1;
+}
+function applyDraw(prev: HandState, action: Action): Step {
+  if (action.type !== 'draw') throw new Error('교환할 카드를 선택하세요.');
+  const indices = [...new Set(action.indices)];
+  if (indices.length !== action.indices.length || indices.some((i) => !Number.isInteger(i) || i < 0 || i > 4)) throw new Error('교환할 카드가 올바르지 않습니다.');
+  const s = cloneState(prev), events: HandEvent[] = [];
+  const index = s.toAct, player = s.players[index];
+  const discarded = indices.map((i) => player.hole[i]);
+  for (const i of indices) {
+    if (!s.deck.length) {
+      s.deck = shuffle(s.discards!, createRng(s.drawSeed!));
+      s.drawSeed = (s.drawSeed! + 1) >>> 0; s.discards = [];
+    }
+    const card = s.deck.pop();
+    if (card === undefined) throw new Error('카드가 부족합니다.');
+    player.hole[i] = card;
+  }
+  s.discards!.push(...discarded);
+  s.drawDone![index] = true;
+  s.actions.push({ street: 'DRAW', player: index, kind: 'draw', amount: 0, to: indices.length, allIn: player.allIn });
+  events.push({ type: 'draw', player: index, count: indices.length });
+  s.toAct = nextDrawer(s, index + 1);
+  if (s.toAct < 0) {
+    s.street = 'RIVER'; s.currentBet = 0; s.minRaise = s.bb; s.lastAggressor = -1;
+    s.players.forEach((p) => { p.bet = 0; p.hasActed = false; });
+    events.push({ type: 'street', street: 'RIVER', cards: [] });
+    s.toAct = findNextToAct(s, s.button + 1);
+    if (s.toAct < 0) showdown(s, events);
+  }
+  return { state: s, events };
 }
 
 function finishWithoutShowdown(s: HandState, events: HandEvent[]) {

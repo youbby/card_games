@@ -3,6 +3,7 @@ import { initializeApp } from '../services/factoryReset';
 import { recoverOpenSessions, sweepBankruptPlayers } from '../services/session';
 import type { Screen } from './store';
 import { useApp } from './store';
+import { recoverHouseRooms } from '../services/house';
 
 /** Where the app should start: create, all-bankrupt guide, or character select. */
 export async function startScreen(): Promise<Screen> {
@@ -24,10 +25,12 @@ async function runBoot(): Promise<void> {
   const app = useApp.getState();
   await initializeApp();
   const recovered = await recoverOpenSessions();
+  const recoveredRooms = await recoverHouseRooms();
   await sweepBankruptPlayers();
   app.setSettings(await getSettings());
   app.setPlayer(null);
   app.reset([await startScreen()]);
+  if (recoveredRooms) app.showToast('중단된 방을 정산했습니다. 진행 중이던 베팅은 패배로 기록됩니다.');
   if (recovered) {
     app.showToast(
       recovered.abandonedLoss > 0

@@ -1,7 +1,7 @@
 import type { Card } from '../../core/cards';
 import type { HandValue } from '../../core/evaluator';
 
-export type Street = 'PREFLOP' | 'FLOP' | 'TURN' | 'RIVER' | 'SHOWDOWN';
+export type Street = 'PREFLOP' | 'DRAW' | 'FLOP' | 'TURN' | 'RIVER' | 'SHOWDOWN';
 
 export interface SeatInput {
   id: string;
@@ -26,13 +26,14 @@ export interface PlayerState {
 }
 
 export type Action =
+  | { type: 'draw'; indices: number[] }
   | { type: 'fold' }
   | { type: 'check' }
   | { type: 'call' }
   /** Bet or raise to a total street bet of `to`. */
   | { type: 'raise'; to: number };
 
-export type ActionKind = 'sb' | 'bb' | 'fold' | 'check' | 'call' | 'bet' | 'raise';
+export type ActionKind = 'sb' | 'bb' | 'fold' | 'check' | 'call' | 'bet' | 'raise' | 'draw';
 
 export interface ActionRecord {
   street: Street;
@@ -73,6 +74,10 @@ export interface HandResult {
 }
 
 export interface HandState {
+  variant?: 'holdem' | 'draw';
+  discards?: Card[];
+  drawDone?: boolean[];
+  drawSeed?: number;
   players: PlayerState[];
   button: number;
   sbIndex: number;
@@ -94,6 +99,7 @@ export interface HandState {
 }
 
 export type HandEvent =
+  | { type: 'draw'; player: number; count: number }
   | { type: 'action'; record: ActionRecord }
   | { type: 'street'; street: Street; cards: Card[] }
   | { type: 'end'; result: HandResult };
