@@ -747,9 +747,23 @@ function ActionArea({
     return (
       <div className="space-y-3 pb-1 text-center">
         <p className="text-sm text-gray-300">내 카드에서 교환할 카드를 누르세요 (0~5장).</p>
-        <Button className="w-full" variant="primary" onClick={() => onAct({ type: 'draw', indices: drawSelection })}>
-          {drawSelection.length ? `${drawSelection.length}장 교환` : '모두 유지'}
+        {/* Nothing selected means a full redraw; standing pat is rare, so it gets the small button. */}
+        <Button
+          className="w-full"
+          variant="primary"
+          onClick={() => onAct({ type: 'draw', indices: drawSelection.length ? drawSelection : [0, 1, 2, 3, 4] })}
+        >
+          {drawSelection.length ? `${drawSelection.length}장 교환` : '모두 교환'}
         </Button>
+        {drawSelection.length === 0 && (
+          <Button
+            className="w-full py-1.5 text-xs"
+            variant="ghost"
+            onClick={() => onAct({ type: 'draw', indices: [] })}
+          >
+            교환 없이 유지
+          </Button>
+        )}
       </div>
     );
   if (view.humanTurn && hand) return <BetControls hand={hand} onAct={onAct} />;

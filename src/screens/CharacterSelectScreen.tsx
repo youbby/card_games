@@ -2,7 +2,8 @@ import { ChevronDown, ChevronRight, Plus, Settings as SettingsIcon, Trash2 } fro
 import { useState } from 'react';
 import { exitApp } from '../app/native';
 import { useApp } from '../app/store';
-import type { Character } from '../data/types';
+import type { Character, Stats } from '../data/types';
+import { GAMES } from '../games/catalog';
 import { deletePlayer, getStats, listPlayers, updateSettings } from '../services/characters';
 import { Avatar, Button, Chips, ConfirmModal, cx, Page } from '../ui/components';
 import { useAsync } from '../ui/hooks';
@@ -78,8 +79,7 @@ export function CharacterSelectScreen() {
                 </div>
                 <Chips amount={player.balance} className="text-sm" />
                 <div className="text-[11px] text-gray-500">
-                  {stats.handsPlayed}핸드 · 승률{' '}
-                  {stats.handsPlayed ? Math.round((stats.handsWon / stats.handsPlayed) * 100) : 0}%
+                  {stats.handsPlayed}판{gameWinRates(stats).map((rate) => ` · ${rate}`)}
                 </div>
               </div>
               <ChevronRight className="h-5 w-5 text-gray-600" />
@@ -164,4 +164,13 @@ export function CharacterSelectScreen() {
       )}
     </Page>
   );
+}
+
+/** "♠️ 52%" for each game played; win rates are never mixed across games. */
+function gameWinRates(stats: Stats): string[] {
+  return GAMES.flatMap(({ id, icon }) => {
+    const bucket = stats.byGame?.[id];
+    if (!bucket?.hands || bucket.won === undefined) return [];
+    return [`${icon} ${Math.round((bucket.won / bucket.hands) * 100)}%`];
+  });
 }
