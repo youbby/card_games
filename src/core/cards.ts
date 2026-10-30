@@ -37,7 +37,7 @@ export function cardToString(card: Card): string {
 export function cardFromString(text: string): Card {
   const rank = RANK_CHARS.indexOf(text[0].toUpperCase()) + 2;
   const suit = SUIT_CHARS.indexOf(text[1].toLowerCase() as (typeof SUIT_CHARS)[number]);
-  if (rank < 2 || suit < 0) throw new Error(`Invalid card: ${text}`);
+  if (rank < 2 || suit < 0) throw new Error(`잘못된 카드 표기입니다: ${text}`);
   return makeCard(rank, suit);
 }
 

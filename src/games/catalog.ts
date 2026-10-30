@@ -13,7 +13,12 @@ export const gameName = (id: GameId = 'holdem') => GAMES.find((game) => game.id 
 export function profitTarget(initialBuyIn: number, deposits: number, multiplier?: number | null): number | null {
   return multiplier == null ? null : deposits + initialBuyIn * multiplier;
 }
-export function reachedProfitLimit(balance: number, initialBuyIn: number, deposits: number, multiplier?: number | null): boolean {
+export function reachedProfitLimit(
+  balance: number,
+  initialBuyIn: number,
+  deposits: number,
+  multiplier?: number | null,
+): boolean {
   const target = profitTarget(initialBuyIn, deposits, multiplier);
   return target !== null && balance >= target;
 }

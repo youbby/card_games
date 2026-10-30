@@ -18,6 +18,7 @@ import {
   seatsInPlay,
   type TableNotice,
 } from './session';
+import { errorMessage } from '../core/errors';
 
 export type TablePhase = 'starting' | 'playing' | 'handOver' | 'profitLimit' | 'needRebuy' | 'noOpponents' | 'ended';
 
@@ -74,7 +75,14 @@ export function actionLabel(r: ActionRecord): string {
   }
 }
 
-const STREET_KO = { PREFLOP: '프리플랍', DRAW: '카드 교환', FLOP: '플랍', TURN: '턴', RIVER: '리버', SHOWDOWN: '쇼다운' } as const;
+const STREET_KO = {
+  PREFLOP: '프리플랍',
+  DRAW: '카드 교환',
+  FLOP: '플랍',
+  TURN: '턴',
+  RIVER: '리버',
+  SHOWDOWN: '쇼다운',
+} as const;
 
 export class TableRunner {
   private session: TableSession;
@@ -113,7 +121,8 @@ export class TableRunner {
       log: this.log,
       seatLabels: this.seatLabels,
       thinkingSeat: this.thinkingSeat,
-      humanTurn: this.phase === 'playing' && !!this.hand && !this.hand.result && this.hand.toAct === human && human >= 0,
+      humanTurn:
+        this.phase === 'playing' && !!this.hand && !this.hand.result && this.hand.toAct === human && human >= 0,
       endResult: this.endResult,
     };
   }
@@ -142,15 +151,29 @@ export class TableRunner {
   }
 
   private reportError(e: unknown) {
-    this.addLog(`오류: ${e instanceof Error ? e.message : String(e)}`, 'system');
+    this.addLog(`오류: ${errorMessage(e)}`, 'system');
     this.emit();
   }
 
   private async setUpHand(): Promise<void> {
-    if (this.disposed || !['starting', 'handOver', 'needRebuy'].includes(this.phase) || (this.phase === 'starting' && this.hand)) return;
+    if (
+      this.disposed ||
+      !['starting', 'handOver', 'needRebuy'].includes(this.phase) ||
+      (this.phase === 'starting' && this.hand)
+    )
+      return;
     const seat = this.session.seats[0]!;
-    if (reachedProfitLimit(seat.stack, this.session.initialBuyIn ?? seat.buyInTotal, seat.buyInTotal, this.session.profitMultiplier)) {
-      this.phase = 'profitLimit'; this.emit(); return;
+    if (
+      reachedProfitLimit(
+        seat.stack,
+        this.session.initialBuyIn ?? seat.buyInTotal,
+        seat.buyInTotal,
+        this.session.profitMultiplier,
+      )
+    ) {
+      this.phase = 'profitLimit';
+      this.emit();
+      return;
     }
     this.phase = 'starting';
     this.seatLabels = {};
@@ -221,7 +244,8 @@ export class TableRunner {
         this.seatLabels = Object.fromEntries(
           Object.entries(this.seatLabels).filter(([, l]) => l === '폴드' || l.startsWith('올인')),
         );
-        const streetLabel = this.session.gameId === 'draw' && e.street === 'RIVER' ? '마지막 베팅' : STREET_KO[e.street];
+        const streetLabel =
+          this.session.gameId === 'draw' && e.street === 'RIVER' ? '마지막 베팅' : STREET_KO[e.street];
         this.addLog(`${streetLabel}${e.cards.length ? ': ' + e.cards.map(formatCard).join(' ') : ''}`, 'street');
       } else if (e.type === 'end') {
         const r = e.result;
@@ -281,9 +305,10 @@ export class TableRunner {
         rng: this.rng,
         human: human >= 0 ? { index: human, model: this.session.opponentModel } : undefined,
       };
-      const action = this.session.gameId === 'draw'
-        ? drawBotDecide(hand, context, this.session.cpuClass === 'HIGH')
-        : botDecide(cpu?.cpuClass ?? this.session.cpuClass, hand, context);
+      const action =
+        this.session.gameId === 'draw'
+          ? drawBotDecide(hand, context, this.session.cpuClass === 'HIGH')
+          : botDecide(cpu?.cpuClass ?? this.session.cpuClass, hand, context);
       this.apply(action);
     }, this.opts.thinkMs());
   }
@@ -316,7 +341,14 @@ export class TableRunner {
     });
     this.inProgress = undefined;
     const seat = this.session.seats[0]!;
-    this.phase = reachedProfitLimit(seat.stack, this.session.initialBuyIn ?? seat.buyInTotal, seat.buyInTotal, this.session.profitMultiplier) ? 'profitLimit' : 'handOver';
+    this.phase = reachedProfitLimit(
+      seat.stack,
+      this.session.initialBuyIn ?? seat.buyInTotal,
+      seat.buyInTotal,
+      this.session.profitMultiplier,
+    )
+      ? 'profitLimit'
+      : 'handOver';
     this.emit();
   }
 

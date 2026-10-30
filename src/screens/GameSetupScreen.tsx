@@ -10,6 +10,7 @@ import { stakeAvailability, startSession } from '../services/session';
 import { Avatar, Button, Chips, ClassBadge, cx, fmt, Page, personalityTags, Section } from '../ui/components';
 import { useAsync } from '../ui/hooks';
 import { gameName, type PokerGameId } from '../games/catalog';
+import { errorMessage } from '../core/errors';
 
 const CLASS_INFO: Record<CpuClass, { title: string; desc: string }> = {
   LOW: { title: '하수', desc: '실수가 많은 초보 상대 · 입문~일반' },
@@ -31,7 +32,9 @@ export function GameSetupScreen({ gameId = 'holdem' }: { gameId?: PokerGameId })
   const { data: availability } = useAsync(() => stakeAvailability(cls, balance), [cls, balance]);
 
   const stakes = stakesForClass(cls);
-  const maxOpponents = availability ? Math.max(0, ...Object.values(availability).map((a) => (a.canAfford ? a.eligibleCpus : 0))) : 0;
+  const maxOpponents = availability
+    ? Math.max(0, ...Object.values(availability).map((a) => (a.canAfford ? a.eligibleCpus : 0)))
+    : 0;
   const maxSeats = Math.min(MAX_SEATS, 1 + maxOpponents);
 
   const stakeOk = (s: StakeLevel) => {
@@ -98,7 +101,7 @@ export function GameSetupScreen({ gameId = 'holdem' }: { gameId?: PokerGameId })
       });
       push({ name: 'table', sessionId: session.id });
     } catch (e) {
-      showToast(e instanceof Error ? e.message : String(e));
+      showToast(errorMessage(e));
       setRollTick((t) => t + 1);
     } finally {
       setBusy(false);
@@ -118,7 +121,11 @@ export function GameSetupScreen({ gameId = 'holdem' }: { gameId?: PokerGameId })
     >
       <div className="mt-2 rounded-xl border border-gray-800 bg-gray-900 p-3 text-xs leading-relaxed text-gray-400">
         {gameId === 'draw' && <p>5장 배분 → 베팅 → 0~5장 교환 → 마지막 베팅 → 족보 비교</p>}
-        <p>{settings.profitLimits[gameId] == null ? '방 수익 한도 없음' : `순이익이 입장금의 ${settings.profitLimits[gameId]}배 이상이면 정산 후 퇴장합니다. 마지막 판 당첨금은 전부 지급됩니다.`}</p>
+        <p>
+          {settings.profitLimits[gameId] == null
+            ? '방 수익 한도 없음'
+            : `순이익이 입장금의 ${settings.profitLimits[gameId]}배 이상이면 정산 후 퇴장합니다. 마지막 판 당첨금은 전부 지급됩니다.`}
+        </p>
       </div>
       <Section title="① 상대 난이도">
         <div className="grid grid-cols-2 gap-2">
@@ -160,7 +167,9 @@ export function GameSetupScreen({ gameId = 'holdem' }: { gameId?: PokerGameId })
         </div>
         {availability && maxSeats < MAX_SEATS && (
           <p className="mt-2 text-[11px] text-gray-500">
-            {maxSeats < MIN_SEATS ? '지금 참가할 수 있는 상대 선수가 없습니다.' : `참가 가능한 상대가 부족해 최대 ${maxSeats}명까지 가능합니다.`}
+            {maxSeats < MIN_SEATS
+              ? '지금 참가할 수 있는 상대 선수가 없습니다.'
+              : `참가 가능한 상대가 부족해 최대 ${maxSeats}명까지 가능합니다.`}
           </p>
         )}
       </Section>
@@ -234,14 +243,20 @@ export function GameSetupScreen({ gameId = 'holdem' }: { gameId?: PokerGameId })
         <Section
           title="⑤ 상대"
           aside={
-            <button className="flex items-center gap-1 text-xs font-bold text-gray-400" onClick={() => setRollTick((t) => t + 1)}>
+            <button
+              className="flex items-center gap-1 text-xs font-bold text-gray-400"
+              onClick={() => setRollTick((t) => t + 1)}
+            >
               <RefreshCw className="h-3.5 w-3.5" /> 다시 뽑기
             </button>
           }
         >
           <div className="space-y-1.5">
             {opponents.map((o) => (
-              <div key={o.id} className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900 px-3 py-2">
+              <div
+                key={o.id}
+                className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900 px-3 py-2"
+              >
                 <Avatar emoji={o.avatar} size="sm" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-bold">{o.name}</div>

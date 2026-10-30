@@ -1,11 +1,18 @@
 import { useState } from 'react';
 import { startScreen } from '../app/boot';
 import { useApp } from '../app/store';
-import { type AnimationSpeed, type Settings, STARTING_CHIPS_MAX, STARTING_CHIPS_MIN, STARTING_CHIPS_PRESETS } from '../data/types';
+import {
+  type AnimationSpeed,
+  type Settings,
+  STARTING_CHIPS_MAX,
+  STARTING_CHIPS_MIN,
+  STARTING_CHIPS_PRESETS,
+} from '../data/types';
 import { getSettings, updateSettings, updateProfitLimit } from '../services/characters';
 import { factoryReset } from '../services/factoryReset';
 import { Button, cx, fmt, Modal, Page, Section } from '../ui/components';
 import { GAMES } from '../games/catalog';
+import { errorMessage } from '../core/errors';
 
 const RESET_WORD = '초기화';
 
@@ -45,7 +52,9 @@ export function SettingsScreen() {
   return (
     <Page title="설정" onBack={back}>
       <Section title="시작 칩">
-        <p className="mb-2 text-[11px] text-gray-500">새 캐릭터를 만들 때만 적용됩니다. 기존 캐릭터와 상대 선수에는 영향이 없습니다.</p>
+        <p className="mb-2 text-[11px] text-gray-500">
+          새 캐릭터를 만들 때만 적용됩니다. 기존 캐릭터와 상대 선수에는 영향이 없습니다.
+        </p>
         <div className="grid grid-cols-3 gap-2">
           {STARTING_CHIPS_PRESETS.map((n) => (
             <Choice key={n} active={settings.startingChips === n} onClick={() => save({ startingChips: n })}>
@@ -73,14 +82,33 @@ export function SettingsScreen() {
       </Section>
 
       <Section title="게임별 방 수익 한도">
-        <p className="mb-3 text-xs leading-relaxed text-gray-400">입장금 대비 순이익 기준입니다. 5배는 1,000칩 입장 시 정산 잔액 6,000칩 이상입니다. 당첨금을 모두 지급하고 다음 판을 막으며, 재입장하면 새로 계산합니다. 변경한 설정은 다음 입장부터 적용됩니다.</p>
+        <p className="mb-3 text-xs leading-relaxed text-gray-400">
+          입장금 대비 순이익 기준입니다. 5배는 1,000칩 입장 시 정산 잔액 6,000칩 이상입니다. 당첨금을 모두 지급하고 다음
+          판을 막으며, 재입장하면 새로 계산합니다. 변경한 설정은 다음 입장부터 적용됩니다.
+        </p>
         <div className="space-y-3">
           {GAMES.map((game) => (
-            <label key={game.id} className="flex items-center justify-between gap-2 rounded-xl border border-gray-800 bg-gray-900 p-3 text-sm">
+            <label
+              key={game.id}
+              className="flex items-center justify-between gap-2 rounded-xl border border-gray-800 bg-gray-900 p-3 text-sm"
+            >
               <span>{game.name}</span>
-              <select aria-label={`${game.name} 수익 한도`} value={settings.profitLimits[game.id] ?? 'none'} className="rounded-lg border border-gray-700 bg-gray-950 px-2 py-2 text-yellow-300" onChange={(event) => void updateProfitLimit(game.id, event.target.value === 'none' ? null : Number(event.target.value)).then(setSettings).catch((error: unknown) => showToast(String(error)))}>
+              <select
+                aria-label={`${game.name} 수익 한도`}
+                value={settings.profitLimits[game.id] ?? 'none'}
+                className="rounded-lg border border-gray-700 bg-gray-950 px-2 py-2 text-yellow-300"
+                onChange={(event) =>
+                  void updateProfitLimit(game.id, event.target.value === 'none' ? null : Number(event.target.value))
+                    .then(setSettings)
+                    .catch((error: unknown) => showToast(errorMessage(error)))
+                }
+              >
                 <option value="none">제한 없음</option>
-                {[1, 2, 3, 5, 10, 20, 50, 100].map((value) => <option key={value} value={value}>순이익 {value}배</option>)}
+                {[1, 2, 3, 5, 10, 20, 50, 100].map((value) => (
+                  <option key={value} value={value}>
+                    순이익 {value}배
+                  </option>
+                ))}
               </select>
             </label>
           ))}
@@ -124,7 +152,9 @@ export function SettingsScreen() {
         <Button variant="danger" className="w-full" onClick={() => setResetStep(1)}>
           전체 초기화
         </Button>
-        <p className="mt-2 text-[11px] text-gray-500">모든 캐릭터, 상대 선수, 전적, 설정을 지우고 설치 직후 상태로 되돌립니다.</p>
+        <p className="mt-2 text-[11px] text-gray-500">
+          모든 캐릭터, 상대 선수, 전적, 설정을 지우고 설치 직후 상태로 되돌립니다.
+        </p>
       </Section>
 
       <Section title="앱 정보">
@@ -191,10 +221,18 @@ function Choice({ active, onClick, children }: { active: boolean; onClick: () =>
 
 function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
-    <button onClick={() => onChange(!value)} className="flex w-full items-center justify-between rounded-xl border border-gray-800 bg-gray-900 px-3 py-3">
+    <button
+      onClick={() => onChange(!value)}
+      className="flex w-full items-center justify-between rounded-xl border border-gray-800 bg-gray-900 px-3 py-3"
+    >
       <span className="text-sm">{label}</span>
       <span className={cx('relative h-6 w-11 rounded-full transition', value ? 'bg-yellow-400' : 'bg-gray-700')}>
-        <span className={cx('absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all', value ? 'left-[22px]' : 'left-0.5')} />
+        <span
+          className={cx(
+            'absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all',
+            value ? 'left-[22px]' : 'left-0.5',
+          )}
+        />
       </span>
     </button>
   );

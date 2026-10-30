@@ -1,5 +1,5 @@
 import { type Card, rankOf, suitOf } from '../../../core/cards';
-import { scoreHand } from '../../../core/evaluator';
+import { evaluate, scoreHand } from '../../../core/evaluator';
 import type { Rng } from '../../../core/rng';
 
 /** Chen formula preflop score (-1..20). AA = 20, 72o ≈ -1. */
@@ -19,43 +19,87 @@ export function chenScore(hole: Card[]): number {
 }
 
 /**
- * Monte Carlo equity against `opponents` random hands: share of the pot won
- * on average (ties count fractionally).
+ * What an opponent's actions say about their hole cards. A random hand is
+ * `{ minChen: -Infinity, madeHandChance: 0 }`.
  */
-export function estimateEquity(hole: Card[], board: Card[], opponents: number, iterations: number, rng: Rng): number {
-  if (opponents <= 0) return 1;
+export interface OpponentRange {
+  /** Hole cards weaker than this Chen score are unlikely (e.g. after a preflop raise). */
+  minChen: number;
+  /** Chance (0..1) that their hole cards improved the current board, after betting into it. */
+  madeHandChance: number;
+}
+
+const RANDOM_HAND: OpponentRange = { minChen: -Infinity, madeHandChance: 0 };
+/** Rejection-sampling attempts per opponent hand before accepting whatever came up. */
+const RANGE_TRIES = 25;
+
+/**
+ * Monte Carlo equity: the share of the pot won on average (ties count
+ * fractionally). Opponents are random hands, or hands drawn from the given
+ * ranges by rejection sampling.
+ */
+export function estimateEquity(
+  hole: Card[],
+  board: Card[],
+  opponents: number | OpponentRange[],
+  iterations: number,
+  rng: Rng,
+): number {
+  const ranges = typeof opponents === 'number' ? Array.from({ length: opponents }, () => RANDOM_HAND) : opponents;
+  if (ranges.length === 0) return 1;
   const known = new Set([...hole, ...board]);
   const deck: Card[] = [];
   for (let c = 0; c < 52; c++) if (!known.has(c)) deck.push(c);
+  const swap = (i: number, j: number) => {
+    const t = deck[i];
+    deck[i] = deck[j];
+    deck[j] = t;
+  };
+
+  const boardCategory = board.length >= 3 ? evaluate(board, false).category : -1;
+  /** Whether two hole cards make more than the board already shows. */
+  const improvesBoard = (a: Card, b: Card) => evaluate([a, b, ...board], false).category > boardCategory;
+  const fits = (range: OpponentRange, needsMadeHand: boolean, a: Card, b: Card) =>
+    (range.minChen === -Infinity || chenScore([a, b]) >= range.minChen) && (!needsMadeHand || improvesBoard(a, b));
 
   const needBoard = 5 - board.length;
-  const draw = needBoard + opponents * 2;
   let total = 0;
   const fullBoard = [...board];
   const mine: Card[] = [...hole, ...board];
   const opp: Card[] = new Array(7);
+  const oppHoles: Card[] = new Array(ranges.length * 2);
 
   for (let it = 0; it < iterations; it++) {
-    // Partial Fisher-Yates: the first `draw` cards become a random sample.
-    for (let i = 0; i < draw; i++) {
-      const j = i + rng.int(deck.length - i);
-      const t = deck[i];
-      deck[i] = deck[j];
-      deck[j] = t;
+    // Partial Fisher-Yates: the front of the deck becomes the random sample.
+    let pos = 0;
+    // Opponents' hole cards first, because their ranges are judged on the current board.
+    for (let o = 0; o < ranges.length; o++) {
+      const range = ranges[o];
+      const needsMadeHand = boardCategory >= 0 && range.madeHandChance > 0 && rng.next() < range.madeHandChance;
+      for (let attempt = 0; ; attempt++) {
+        swap(pos, pos + rng.int(deck.length - pos));
+        swap(pos + 1, pos + 1 + rng.int(deck.length - pos - 1));
+        if (attempt >= RANGE_TRIES || fits(range, needsMadeHand, deck[pos], deck[pos + 1])) break;
+      }
+      oppHoles[o * 2] = deck[pos];
+      oppHoles[o * 2 + 1] = deck[pos + 1];
+      pos += 2;
     }
     fullBoard.length = board.length;
     mine.length = 2 + board.length;
     for (let i = 0; i < needBoard; i++) {
-      fullBoard.push(deck[i]);
-      mine.push(deck[i]);
+      swap(pos, pos + rng.int(deck.length - pos));
+      fullBoard.push(deck[pos]);
+      mine.push(deck[pos]);
+      pos++;
     }
     const myScore = scoreHand(mine);
 
     let best = true;
     let ties = 0;
-    for (let o = 0; o < opponents; o++) {
-      opp[0] = deck[needBoard + o * 2];
-      opp[1] = deck[needBoard + o * 2 + 1];
+    for (let o = 0; o < ranges.length; o++) {
+      opp[0] = oppHoles[o * 2];
+      opp[1] = oppHoles[o * 2 + 1];
       for (let i = 0; i < 5; i++) opp[2 + i] = fullBoard[i];
       const s = scoreHand(opp);
       if (s > myScore) {

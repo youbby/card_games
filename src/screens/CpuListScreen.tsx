@@ -19,7 +19,11 @@ export function CpuListScreen() {
     <Page title="상대 선수" onBack={back}>
       <div className="grid grid-cols-2 gap-1 rounded-xl bg-gray-900 p-1 text-xs font-bold">
         {(['LOW', 'HIGH'] as CpuClass[]).map((c) => (
-          <button key={c} onClick={() => setCls(c)} className={cx('rounded-lg py-2', cls === c ? 'bg-gray-700 text-white' : 'text-gray-400')}>
+          <button
+            key={c}
+            onClick={() => setCls(c)}
+            className={cx('rounded-lg py-2', cls === c ? 'bg-gray-700 text-white' : 'text-gray-400')}
+          >
             {CLASS_LABEL[c]}
           </button>
         ))}
@@ -29,7 +33,10 @@ export function CpuListScreen() {
       </p>
       <div className="mt-3 space-y-2">
         {data?.map(({ cpu, stats }) => (
-          <div key={cpu.id} className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900 px-3 py-2.5">
+          <div
+            key={cpu.id}
+            className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900 px-3 py-2.5"
+          >
             <Avatar emoji={cpu.avatar} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">

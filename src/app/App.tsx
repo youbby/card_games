@@ -9,18 +9,24 @@ import { StatsScreen } from '../screens/StatsScreen';
 import { TableScreen } from '../screens/TableScreen';
 import { HouseScreen } from '../screens/HouseScreen';
 import { HouseSetupScreen } from '../screens/HouseSetupScreen';
+import { HelpScreen } from '../screens/HelpScreen';
+import { applyAnimSpeed } from '../ui/motion';
 import { boot } from './boot';
 import { setUpNative } from './native';
 import { currentScreen, useApp } from './store';
+import { errorMessage } from '../core/errors';
 
 export function App() {
   const screen = useApp(currentScreen);
   const toast = useApp((s) => s.toast);
+  const animationSpeed = useApp((s) => s.settings.animationSpeed);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => applyAnimSpeed(animationSpeed), [animationSpeed]);
 
   useEffect(() => {
     void setUpNative();
-    boot().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+    boot().catch((e: unknown) => setError(errorMessage(e)));
   }, []);
 
   let content;
@@ -43,9 +49,12 @@ export function App() {
       content = <LobbyScreen />;
       break;
     case 'setup':
-      content = screen.gameId === 'blackjack' || screen.gameId === 'baccarat'
-        ? <HouseSetupScreen gameId={screen.gameId} />
-        : <GameSetupScreen gameId={screen.gameId ?? 'holdem'} />;
+      content =
+        screen.gameId === 'blackjack' || screen.gameId === 'baccarat' ? (
+          <HouseSetupScreen gameId={screen.gameId} />
+        ) : (
+          <GameSetupScreen gameId={screen.gameId ?? 'holdem'} />
+        );
       break;
     case 'table':
       content = <TableScreen key={screen.sessionId} sessionId={screen.sessionId} />;
@@ -61,6 +70,9 @@ export function App() {
       break;
     case 'settings':
       content = <SettingsScreen />;
+      break;
+    case 'help':
+      content = <HelpScreen gameId={screen.gameId} />;
       break;
   }
 

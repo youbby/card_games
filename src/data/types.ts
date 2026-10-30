@@ -95,6 +95,8 @@ export interface HandRecord {
 export interface Bucket {
   hands: number;
   net: number;
+  /** Hands or rounds with a profit. Missing in buckets saved before v0.3. */
+  won?: number;
 }
 
 export interface Stats {
@@ -128,6 +130,8 @@ export interface Settings {
   animationSpeed: AnimationSpeed;
   cpuThinkTime: 'SHORT' | 'NORMAL';
   lastCharacterId?: string;
+  /** Games whose first-visit tutorial has been shown. */
+  tutorialsSeen?: GameId[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -138,6 +142,7 @@ export const DEFAULT_SETTINGS: Settings = {
   haptics: true,
   animationSpeed: 'NORMAL',
   cpuThinkTime: 'NORMAL',
+  tutorialsSeen: [],
 };
 
 export const STARTING_CHIPS_MIN = 1_000;

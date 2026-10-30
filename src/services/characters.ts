@@ -1,6 +1,6 @@
 import { db, newId } from '../data/db';
 import { AVATARS } from '../data/names';
-import { type Character, DEFAULT_SETTINGS, type Settings, type Stats } from '../data/types';
+import { type Bucket, type Character, DEFAULT_SETTINGS, type Settings, type Stats } from '../data/types';
 import type { GameId } from '../games/catalog';
 
 export function emptyStats(characterId: string): Stats {
@@ -24,6 +24,12 @@ export function emptyStats(characterId: string): Stats {
   };
 }
 
+/** Adds one finished hand or round to a stats bucket. */
+export function bumpBucket<K extends string>(map: Partial<Record<K, Bucket>>, key: K, net: number): void {
+  const bucket = map[key] ?? { hands: 0, net: 0, won: 0 };
+  map[key] = { hands: bucket.hands + 1, net: bucket.net + net, won: (bucket.won ?? 0) + (net > 0 ? 1 : 0) };
+}
+
 export async function getSettings(): Promise<Settings> {
   const saved = await db.settings.get('app');
   return { ...DEFAULT_SETTINGS, ...saved, profitLimits: { ...DEFAULT_SETTINGS.profitLimits, ...saved?.profitLimits } };
@@ -31,7 +37,11 @@ export async function getSettings(): Promise<Settings> {
 
 export async function updateSettings(patch: Partial<Omit<Settings, 'id'>>): Promise<Settings> {
   const next = { ...(await getSettings()), ...patch, id: 'app' as const };
-  if (Object.values(next.profitLimits).some((value) => value !== null && (!Number.isInteger(value) || value < 1 || value > 100))) {
+  if (
+    Object.values(next.profitLimits).some(
+      (value) => value !== null && (!Number.isInteger(value) || value < 1 || value > 100),
+    )
+  ) {
     throw new Error('수익 한도는 1~100배 또는 제한 없음으로 설정하세요.');
   }
   await db.settings.put(next);
@@ -85,11 +95,12 @@ export async function createPlayer(name: string, avatar: string = AVATARS[0]): P
 }
 
 export async function deletePlayer(id: string): Promise<void> {
-  await db.transaction('rw', [db.characters, db.stats, db.hands, db.sessions], async () => {
+  await db.transaction('rw', [db.characters, db.stats, db.hands, db.sessions, db.rooms], async () => {
     await db.characters.delete(id);
     await db.stats.delete(id);
     await db.hands.where('playerId').equals(id).delete();
     await db.sessions.where('playerId').equals(id).delete();
+    await db.rooms.where('playerId').equals(id).delete();
   });
 }
 

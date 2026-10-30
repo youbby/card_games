@@ -1,0 +1,6 @@
+android/
+dist/
+release/
+docs/
+*.md
+package-lock.json

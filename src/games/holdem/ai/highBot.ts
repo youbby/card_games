@@ -1,7 +1,7 @@
 import { rankOf, suitOf } from '../../../core/cards';
 import type { Action, HandState } from '../types';
 import { passive, raiseTo, situation, type Situation } from './common';
-import { chenScore, estimateEquity } from './handStrength';
+import { chenScore, estimateEquity, type OpponentRange } from './handStrength';
 import type { BotContext } from './types';
 
 const EQUITY_ITERATIONS = 500;
@@ -64,13 +64,47 @@ function preflop(view: HandState, ctx: BotContext): Action {
   const raiseBb = view.currentBet / bb;
   const priceRatio = toCall / (stack + me.bet);
   if (chen >= 12 && legal.canRaise) return raiseTo(legal, view.currentBet * 3, bb);
-  const bluff3bet = suitOf(me.hole[0]) === suitOf(me.hole[1]) && Math.max(rankOf(me.hole[0]), rankOf(me.hole[1])) === 14;
+  const bluff3bet =
+    suitOf(me.hole[0]) === suitOf(me.hole[1]) && Math.max(rankOf(me.hole[0]), rankOf(me.hole[1])) === 14;
   if (bluff3bet && legal.canRaise && raiseBb < 5 && rng.next() < pers.bluff * 0.5) {
     return raiseTo(legal, view.currentBet * 3, bb);
   }
   const callAt = 7 + tight + Math.min(4, raiseBb / 3) + (priceRatio > 0.3 ? 2 : 0);
   if (chen >= callAt) return call;
   return passive(legal);
+}
+
+/** Reads each live opponent's hole-card range from how they bet this hand. */
+function opponentRanges(view: HandState, ctx: BotContext): OpponentRange[] {
+  const ranges: OpponentRange[] = [];
+  view.players.forEach((p, i) => {
+    if (i === view.toAct || p.folded) return;
+    let preflopRaises = 0;
+    let calledRaise = false;
+    let raiseSeen = false;
+    let flopAggression = false;
+    let lateAggression = false;
+    for (const a of view.actions) {
+      const aggressive = a.kind === 'raise' || a.kind === 'bet';
+      if (a.street === 'PREFLOP') {
+        if (a.player === i && aggressive) preflopRaises++;
+        if (a.player === i && a.kind === 'call' && raiseSeen) calledRaise = true;
+        if (aggressive) raiseSeen = true;
+      } else if (a.player === i && aggressive) {
+        if (a.street === 'FLOP') flopAggression = true;
+        else lateAggression = true;
+      }
+    }
+
+    let minChen = preflopRaises >= 2 ? 10 : preflopRaises === 1 ? 7 : calledRaise ? 4 : -Infinity;
+    // A loose human plays wider ranges than the textbook.
+    const model = ctx.human?.index === i ? ctx.human.model : undefined;
+    if (model && model.hands >= 10 && model.vpip / model.hands > 0.45 && minChen !== -Infinity) minChen -= 2;
+    // Bets on the turn or river usually mean a real hand; a flop bet less so (c-bets).
+    const madeHandChance = lateAggression ? 0.7 : flopAggression ? 0.4 : 0;
+    ranges.push({ minChen, madeHandChance });
+  });
+  return ranges;
 }
 
 function humanTendency(ctx: BotContext): { foldsALot: boolean; callsALot: boolean } {
@@ -88,7 +122,7 @@ function postflop(view: HandState, ctx: BotContext): Action {
   const bb = view.bb;
   const call: Action = legal.canCall ? { type: 'call' } : { type: 'check' };
 
-  const equity = estimateEquity(me.hole, view.board, opponents, EQUITY_ITERATIONS, rng);
+  const equity = estimateEquity(me.hole, view.board, opponentRanges(view, ctx), EQUITY_ITERATIONS, rng);
   const human = ctx.human;
   const humanInHand = human !== undefined && !view.players[human.index]?.folded;
   const { foldsALot, callsALot } = humanInHand ? humanTendency(ctx) : { foldsALot: false, callsALot: false };

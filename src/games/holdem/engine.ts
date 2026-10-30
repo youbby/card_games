@@ -88,8 +88,8 @@ export function potTotal(s: HandState): number {
 export function startHand(input: StartHandInput): Step {
   const { players: seats, button, sb, bb, rng } = input;
   const n = seats.length;
-  if (n < 2) throw new Error('Need at least 2 players');
-  if (seats.some((p) => p.stack <= 0)) throw new Error('Every player needs chips');
+  if (n < 2) throw new Error('플레이어가 2명 이상 필요합니다.');
+  if (seats.some((p) => p.stack <= 0)) throw new Error('칩이 없는 플레이어가 있습니다.');
 
   const headsUp = n === 2;
   const sbIndex = headsUp ? button : (button + 1) % n;
@@ -185,7 +185,7 @@ export function legalActions(s: HandState): LegalActions {
  * facing a bet becomes a fold).
  */
 export function applyAction(prev: HandState, action: Action): Step {
-  if (prev.toAct < 0 || prev.result) throw new Error('No player to act');
+  if (prev.toAct < 0 || prev.result) throw new Error('지금 행동할 플레이어가 없습니다.');
   if (prev.street === 'DRAW') return applyDraw(prev, action);
   if (action.type === 'draw') throw new Error('지금은 카드를 교환할 수 없습니다.');
   const s = cloneState(prev);
@@ -262,7 +262,10 @@ function dealStreet(s: HandState, street: Street, events: HandEvent[]) {
 
 function endRound(s: HandState, events: HandEvent[]) {
   if (s.variant === 'draw') {
-    if (s.street !== 'PREFLOP') { showdown(s, events); return; }
+    if (s.street !== 'PREFLOP') {
+      showdown(s, events);
+      return;
+    }
     s.street = 'DRAW';
     s.drawDone = s.players.map((player) => player.folded);
     s.toAct = nextDrawer(s, s.button + 1);
@@ -298,17 +301,25 @@ function nextDrawer(s: HandState, from: number): number {
   }
   return -1;
 }
+
+/** Five-card draw: the player to act swaps the chosen cards, then the last betting round starts. */
 function applyDraw(prev: HandState, action: Action): Step {
   if (action.type !== 'draw') throw new Error('교환할 카드를 선택하세요.');
   const indices = [...new Set(action.indices)];
-  if (indices.length !== action.indices.length || indices.some((i) => !Number.isInteger(i) || i < 0 || i > 4)) throw new Error('교환할 카드가 올바르지 않습니다.');
-  const s = cloneState(prev), events: HandEvent[] = [];
-  const index = s.toAct, player = s.players[index];
+  const invalid = indices.some((i) => !Number.isInteger(i) || i < 0 || i > 4);
+  if (indices.length !== action.indices.length || invalid) throw new Error('교환할 카드가 올바르지 않습니다.');
+
+  const s = cloneState(prev);
+  const events: HandEvent[] = [];
+  const index = s.toAct;
+  const player = s.players[index];
   const discarded = indices.map((i) => player.hole[i]);
   for (const i of indices) {
+    // An empty deck is refilled with earlier discards only, never this player's own.
     if (!s.deck.length) {
       s.deck = shuffle(s.discards!, createRng(s.drawSeed!));
-      s.drawSeed = (s.drawSeed! + 1) >>> 0; s.discards = [];
+      s.drawSeed = (s.drawSeed! + 1) >>> 0;
+      s.discards = [];
     }
     const card = s.deck.pop();
     if (card === undefined) throw new Error('카드가 부족합니다.');
@@ -320,8 +331,15 @@ function applyDraw(prev: HandState, action: Action): Step {
   events.push({ type: 'draw', player: index, count: indices.length });
   s.toAct = nextDrawer(s, index + 1);
   if (s.toAct < 0) {
-    s.street = 'RIVER'; s.currentBet = 0; s.minRaise = s.bb; s.lastAggressor = -1;
-    s.players.forEach((p) => { p.bet = 0; p.hasActed = false; });
+    // Everyone has drawn: the final betting round reuses the RIVER street.
+    s.street = 'RIVER';
+    s.currentBet = 0;
+    s.minRaise = s.bb;
+    s.lastAggressor = -1;
+    s.players.forEach((p) => {
+      p.bet = 0;
+      p.hasActed = false;
+    });
     events.push({ type: 'street', street: 'RIVER', cards: [] });
     s.toAct = findNextToAct(s, s.button + 1);
     if (s.toAct < 0) showdown(s, events);
@@ -373,10 +391,13 @@ function settle(s: HandState, events: HandEvent[], r: Omit<HandResult, 'net'>) {
 /** Whether the player at `index` voluntarily put chips in preflop (VPIP). */
 export function didVpip(s: HandState, index: number): boolean {
   return s.actions.some(
-    (a) => a.player === index && a.street === 'PREFLOP' && (a.kind === 'call' || a.kind === 'raise' || a.kind === 'bet'),
+    (a) =>
+      a.player === index && a.street === 'PREFLOP' && (a.kind === 'call' || a.kind === 'raise' || a.kind === 'bet'),
   );
 }
 
 export function didPfr(s: HandState, index: number): boolean {
-  return s.actions.some((a) => a.player === index && a.street === 'PREFLOP' && (a.kind === 'raise' || a.kind === 'bet'));
+  return s.actions.some(
+    (a) => a.player === index && a.street === 'PREFLOP' && (a.kind === 'raise' || a.kind === 'bet'),
+  );
 }

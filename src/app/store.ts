@@ -14,7 +14,8 @@ export type Screen =
   | { name: 'house'; roomId: string }
   | { name: 'stats'; characterId: string }
   | { name: 'cpus' }
-  | { name: 'settings' };
+  | { name: 'settings' }
+  | { name: 'help'; gameId?: GameId };
 
 interface AppState {
   stack: Screen[];

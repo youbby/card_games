@@ -25,7 +25,9 @@ function uniqueName(taken: Set<string>, rng: Rng): string {
 
 export async function listCpus(cls?: CpuClass): Promise<Character[]> {
   const cpus = await db.characters.where('kind').equals('CPU').toArray();
-  return cpus.filter((c) => c.status === 'ACTIVE' && (!cls || c.cpuClass === cls)).sort((a, b) => b.balance - a.balance);
+  return cpus
+    .filter((c) => c.status === 'ACTIVE' && (!cls || c.cpuClass === cls))
+    .sort((a, b) => b.balance - a.balance);
 }
 
 /** Tops up each class to CPU_POOL_SIZE active CPUs. Returns the CPUs created. */

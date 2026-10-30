@@ -21,17 +21,51 @@ export function StatsScreen({ characterId }: { characterId: string }) {
       getCharacter(characterId),
       getStats(characterId),
       db.sessions.where('playerId').equals(characterId).toArray(),
-      db.hands.where('[playerId+playedAt]').between([characterId, 0], [characterId, Infinity]).reverse().limit(100).toArray(),
+      db.hands
+        .where('[playerId+playedAt]')
+        .between([characterId, 0], [characterId, Infinity])
+        .reverse()
+        .limit(100)
+        .toArray(),
       db.rooms.where('playerId').equals(characterId).toArray(),
     ]);
     const history = [
-      ...sessions.filter((s) => !s.active).map((s) => ({ id: s.id, gameId: s.gameId, cpuClass: s.cpuClass, stakeId: s.stakeId, seatCount: s.seatCount, startedAt: s.startedAt, handsPlayed: s.handsPlayed, buyIn: s.seats[0]?.buyInTotal ?? 0, net: (s.seats[0]?.stack ?? 0) - (s.seats[0]?.buyInTotal ?? 0) })),
-      ...rooms.filter((r) => !r.active).map((r) => ({ id: r.id, gameId: r.gameId, cpuClass: r.cpuClass, stakeId: r.stakeId, seatCount: 2, startedAt: r.startedAt, handsPlayed: r.roundsPlayed, buyIn: r.initialBuyIn, net: r.balance - r.initialBuyIn })),
+      ...sessions
+        .filter((s) => !s.active)
+        .map((s) => ({
+          id: s.id,
+          gameId: s.gameId,
+          cpuClass: s.cpuClass,
+          stakeId: s.stakeId,
+          seatCount: s.seatCount,
+          startedAt: s.startedAt,
+          handsPlayed: s.handsPlayed,
+          buyIn: s.seats[0]?.buyInTotal ?? 0,
+          net: (s.seats[0]?.stack ?? 0) - (s.seats[0]?.buyInTotal ?? 0),
+        })),
+      ...rooms
+        .filter((r) => !r.active)
+        .map((r) => ({
+          id: r.id,
+          gameId: r.gameId,
+          cpuClass: r.cpuClass,
+          stakeId: r.stakeId,
+          seatCount: 2,
+          startedAt: r.startedAt,
+          handsPlayed: r.roundsPlayed,
+          buyIn: r.initialBuyIn,
+          net: r.balance - r.initialBuyIn,
+        })),
     ].sort((a, b) => b.startedAt - a.startedAt);
     return { character, stats, sessions: history, hands };
   }, [characterId]);
 
-  if (!data?.character) return <Page title="전적" onBack={back}>{null}</Page>;
+  if (!data?.character)
+    return (
+      <Page title="전적" onBack={back}>
+        {null}
+      </Page>
+    );
   const { character: c, stats: s, sessions, hands } = data;
 
   return (
@@ -58,7 +92,11 @@ export function StatsScreen({ characterId }: { characterId: string }) {
             ['hands', '핸드'],
           ] as const
         ).map(([id, label]) => (
-          <button key={id} onClick={() => setTab(id)} className={cx('rounded-lg py-2', tab === id ? 'bg-gray-700 text-white' : 'text-gray-400')}>
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={cx('rounded-lg py-2', tab === id ? 'bg-gray-700 text-white' : 'text-gray-400')}
+          >
             {label}
           </button>
         ))}
@@ -67,16 +105,32 @@ export function StatsScreen({ characterId }: { characterId: string }) {
       {tab === 'summary' && (
         <>
           <div className="mt-4 grid grid-cols-3 gap-2">
-            <Tile label="핸드" value={fmt(s.handsPlayed)} />
-            <Tile label="승률" value={pct(s.handsWon, s.handsPlayed)} />
             <Tile label="누적 손익" value={signed(s.netProfit)} valueClass={tone(s.netProfit)} />
-            <Tile label="최대 획득 팟" value={fmt(s.biggestPotWon)} />
-            <Tile label="최대 손실" value={fmt(s.biggestLoss)} />
+            <Tile label="전체 플레이" value={`${fmt(s.handsPlayed)}판`} />
             <Tile label="플레이 시간" value={`${Math.round(s.playTimeMs / 60000)}분`} />
-            <Tile label="홀덤 VPIP" value={pct(s.vpipCount, s.byGame?.holdem?.hands ?? s.handsPlayed)} />
-            <Tile label="홀덤 PFR" value={pct(s.pfrCount, s.byGame?.holdem?.hands ?? s.handsPlayed)} />
-            <Tile label="쇼다운 승률" value={pct(s.showdownsWon, s.showdowns)} />
+            <Tile label="입장 횟수" value={fmt(s.sessions)} />
+            <Tile label="최대 획득" value={fmt(s.biggestPotWon)} />
+            <Tile label="최대 손실" value={fmt(s.biggestLoss)} />
           </div>
+
+          <Section title="게임별 성적">
+            <div className="grid grid-cols-2 gap-2">
+              {GAMES.map((game) => (
+                <GameCard key={game.id} icon={game.icon} name={game.name} bucket={s.byGame?.[game.id]}>
+                  {game.id === 'holdem' && (
+                    <>
+                      <GameStat label="VPIP" value={pct(s.vpipCount, s.byGame?.holdem?.hands ?? 0)} />
+                      <GameStat label="PFR" value={pct(s.pfrCount, s.byGame?.holdem?.hands ?? 0)} />
+                    </>
+                  )}
+                </GameCard>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] text-gray-500">
+              포커(홀덤·드로우) 쇼다운 승률 {pct(s.showdownsWon, s.showdowns)} · 승률은 그 게임에서 칩을 딴 판의
+              비율입니다.
+            </p>
+          </Section>
 
           {s.bestHand && (
             <Section title="최고 족보">
@@ -94,9 +148,6 @@ export function StatsScreen({ characterId }: { characterId: string }) {
             </Section>
           )}
 
-          <Section title="게임별">
-            <BucketTable rows={GAMES.map((game) => ({ label: game.name, bucket: s.byGame?.[game.id] }))} />
-          </Section>
           <Section title="포커 클래스별">
             <BucketTable
               rows={(['LOW', 'HIGH'] as const).map((k) => ({ label: <ClassBadge cls={k} />, bucket: s.byClass[k] }))}
@@ -157,6 +208,43 @@ function Tile({ label, value, valueClass = 'text-gray-100' }: { label: string; v
   );
 }
 
+function GameCard({
+  icon,
+  name,
+  bucket,
+  children,
+}: {
+  icon: string;
+  name: string;
+  bucket?: Bucket;
+  children?: React.ReactNode;
+}) {
+  const hands = bucket?.hands ?? 0;
+  return (
+    <div className="rounded-xl border border-gray-800 bg-gray-900 p-3">
+      <div className="flex items-center gap-1.5 text-sm font-extrabold">
+        <span>{icon}</span>
+        <span className="truncate">{name}</span>
+      </div>
+      <div className="mt-2 space-y-0.5">
+        <GameStat label="플레이" value={`${fmt(hands)}판`} />
+        <GameStat label="승률" value={bucket?.won === undefined ? '-' : pct(bucket.won, hands)} />
+        <GameStat label="손익" value={signed(bucket?.net ?? 0)} valueClass={tone(bucket?.net ?? 0)} />
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function GameStat({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
+  return (
+    <div className="flex justify-between text-xs">
+      <span className="text-gray-500">{label}</span>
+      <span className={cx('font-bold tabular-nums', valueClass)}>{value}</span>
+    </div>
+  );
+}
+
 function BucketTable({ rows }: { rows: { label: React.ReactNode; bucket?: Bucket }[] }) {
   return (
     <div className="divide-y divide-gray-800 rounded-xl border border-gray-800 bg-gray-900 text-sm">
@@ -164,7 +252,9 @@ function BucketTable({ rows }: { rows: { label: React.ReactNode; bucket?: Bucket
         <div key={i} className="flex items-center px-3 py-2">
           <div className="w-16">{r.label}</div>
           <div className="flex-1 text-xs text-gray-500">{r.bucket ? `${fmt(r.bucket.hands)}핸드` : '-'}</div>
-          <div className={cx('font-bold tabular-nums', tone(r.bucket?.net ?? 0))}>{r.bucket ? signed(r.bucket.net) : ''}</div>
+          <div className={cx('font-bold tabular-nums', tone(r.bucket?.net ?? 0))}>
+            {r.bucket ? signed(r.bucket.net) : ''}
+          </div>
         </div>
       ))}
     </div>
@@ -174,10 +264,17 @@ function BucketTable({ rows }: { rows: { label: React.ReactNode; bucket?: Bucket
 function HandRow({ h }: { h: HandRecord }) {
   const [open, setOpen] = useState(false);
   return (
-    <button className="w-full rounded-xl border border-gray-800 bg-gray-900 p-2.5 text-left" onClick={() => setOpen((v) => !v)}>
+    <button
+      className="w-full rounded-xl border border-gray-800 bg-gray-900 p-2.5 text-left"
+      onClick={() => setOpen((v) => !v)}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex gap-0.5">
-          {h.holeCards.length ? h.holeCards.map((t, i) => <PlayingCard key={i} card={cardFromString(t)} size="xs" />) : <span className="text-xs text-gray-500">-</span>}
+          {h.holeCards.length ? (
+            h.holeCards.map((t, i) => <PlayingCard key={i} card={cardFromString(t)} size="xs" />)
+          ) : (
+            <span className="text-xs text-gray-500">-</span>
+          )}
         </div>
         <div className="flex gap-0.5">
           {h.board.map((t, i) => (
@@ -191,8 +288,19 @@ function HandRow({ h }: { h: HandRecord }) {
         <span>{h.position}</span>
         <span>팟 {fmt(h.potTotal)}</span>
         {h.bestHand && <span className="text-emerald-400">{h.bestHand.name}</span>}
-        {h.abandoned && <span className="text-red-400">중도 이탈(폴드)</span>}
-        <span className="ml-auto">{new Date(h.playedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+        {h.abandoned && (
+          <span className="text-red-400">
+            중도 이탈({h.gameId === 'blackjack' || h.gameId === 'baccarat' ? '패배' : '폴드'})
+          </span>
+        )}
+        <span className="ml-auto">
+          {new Date(h.playedAt).toLocaleString('ko-KR', {
+            month: 'numeric',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+        </span>
       </div>
       {open && (
         <div className="mt-2 space-y-0.5 border-t border-gray-800 pt-2 text-[11px] text-gray-400">
@@ -214,8 +322,23 @@ function HandRow({ h }: { h: HandRecord }) {
   );
 }
 
-const STREET_KO: Record<string, string> = { PREFLOP: '프리플랍', DRAW: '카드 교환', FLOP: '플랍', TURN: '턴', RIVER: '리버' };
-const KIND_KO: Record<string, string> = { sb: 'SB', bb: 'BB', fold: '폴드', check: '체크', call: '콜', bet: '벳', raise: '레이즈', draw: '교환' };
+const STREET_KO: Record<string, string> = {
+  PREFLOP: '프리플랍',
+  DRAW: '카드 교환',
+  FLOP: '플랍',
+  TURN: '턴',
+  RIVER: '리버',
+};
+const KIND_KO: Record<string, string> = {
+  sb: 'SB',
+  bb: 'BB',
+  fold: '폴드',
+  check: '체크',
+  call: '콜',
+  bet: '벳',
+  raise: '레이즈',
+  draw: '교환',
+};
 
 function Empty({ text }: { text: string }) {
   return <div className="py-10 text-center text-sm text-gray-600">{text}</div>;

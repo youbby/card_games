@@ -45,8 +45,12 @@ textarea {
   flex-shrink: 0;
 }
 
-.table-center { top: 52%; }
-.table-center-draw { top: 60%; }
+.table-center {
+  top: 52%;
+}
+.table-center-draw {
+  top: 60%;
+}
 
 .round-result {
   display: flex;
@@ -60,19 +64,25 @@ textarea {
   padding: 10px 12px;
 }
 
-.round-result-compact { height: 84px; padding: 8px 10px; }
+.round-result-compact {
+  height: 84px;
+  padding: 8px 10px;
+}
 .round-result-win {
   color: #f6df9b;
   border-color: #c8a95e;
   background: linear-gradient(135deg, #3c3018, #1d211b);
-  box-shadow: inset 0 1px 0 #f6df9b18, 0 0 20px #c8a95e18;
+  box-shadow:
+    inset 0 1px 0 #f6df9b18,
+    0 0 20px #c8a95e18;
 }
 .round-result-loss {
   color: #f0bac0;
   border-color: #86505e;
   background: linear-gradient(135deg, #30222b, #191d28);
 }
-.round-result-draw, .round-result-mixed {
+.round-result-draw,
+.round-result-mixed {
   color: #d7e3ef;
   border-color: #607184;
   background: linear-gradient(135deg, #24313c, #171e28);
@@ -90,8 +100,13 @@ textarea {
   font-size: 14px;
   font-weight: 700;
   line-height: 18px;
-  box-shadow: inset 0 1px 0 #ffffff08, 0 3px 10px #00000020;
-  transition: background 120ms, border-color 120ms, box-shadow 120ms;
+  box-shadow:
+    inset 0 1px 0 #ffffff08,
+    0 3px 10px #00000020;
+  transition:
+    background 120ms,
+    border-color 120ms,
+    box-shadow 120ms;
 }
 
 .poker-action-fold {
@@ -110,7 +125,9 @@ textarea {
   border-color: #e8d49f;
   background: linear-gradient(180deg, #ead7a5, #c3a76a);
   color: #241e12;
-  box-shadow: inset 0 1px 0 #fff6df80, 0 3px 12px #b493471a;
+  box-shadow:
+    inset 0 1px 0 #fff6df80,
+    0 3px 12px #b493471a;
 }
 
 .poker-action:active:not(:disabled) {
@@ -147,7 +164,9 @@ textarea {
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.02em;
-  box-shadow: inset 0 0 0 2px #00000015, 0 2px 6px #00000060;
+  box-shadow:
+    inset 0 0 0 2px #00000015,
+    0 2px 6px #00000060;
 }
 
 .position-chip-d {
@@ -169,7 +188,9 @@ textarea {
 }
 
 @media (max-height: 700px) {
-  .table-center { top: 68%; }
+  .table-center {
+    top: 68%;
+  }
   .table-actions {
     height: 176px;
   }
@@ -195,17 +216,26 @@ textarea {
 }
 
 .glow-turn {
-  box-shadow: 0 0 0 2px #facc15, 0 0 18px rgba(250, 204, 21, 0.6);
+  box-shadow:
+    0 0 0 2px #facc15,
+    0 0 18px rgba(250, 204, 21, 0.6);
 }
 
 .glow-win {
-  box-shadow: 0 0 0 2px #34d399, 0 0 18px rgba(52, 211, 153, 0.7);
+  box-shadow:
+    0 0 0 2px #34d399,
+    0 0 18px rgba(52, 211, 153, 0.7);
+}
+
+/* --anim scales every animation: 1.4 slow, 1 normal, 0.6 fast, 0 when motion is reduced. */
+:root {
+  --anim: 1;
 }
 
 @keyframes deal-in {
   from {
     opacity: 0;
-    transform: translateY(-12px) scale(0.85);
+    transform: translateY(-28px) rotate(-8deg) scale(0.8);
   }
   to {
     opacity: 1;
@@ -215,7 +245,22 @@ textarea {
 
 .deal-in {
   /* backwards: don't pin opacity/transform after the animation, so dim/highlight classes apply */
-  animation: deal-in 0.25s ease-out backwards;
+  animation: deal-in calc(0.3s * var(--anim, 1)) cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+}
+
+@keyframes flip-in {
+  from {
+    transform: perspective(500px) rotateY(90deg);
+    filter: brightness(0.6);
+  }
+  to {
+    transform: none;
+    filter: none;
+  }
+}
+
+.flip-in {
+  animation: flip-in calc(0.38s * var(--anim, 1)) ease-out backwards;
 }
 
 @keyframes pop-in {
@@ -230,7 +275,97 @@ textarea {
 }
 
 .pop-in {
-  animation: pop-in 0.18s ease-out backwards;
+  animation: pop-in calc(0.18s * var(--anim, 1)) ease-out backwards;
+}
+
+/* A result banner rising into place. */
+@keyframes result-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.result-in {
+  animation: result-in calc(0.32s * var(--anim, 1)) cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+}
+
+/* "+1,200" rising from a winner and fading out. */
+@keyframes float-up {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 8px) scale(0.8);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.05);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -30px) scale(1);
+  }
+}
+
+.float-up {
+  pointer-events: none;
+  position: absolute;
+  left: 50%;
+  z-index: 30;
+  white-space: nowrap;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 6px #000;
+  animation: float-up calc(1.8s * var(--anim, 1)) ease-out forwards;
+}
+
+/* The pot or a stack briefly swelling when chips arrive. */
+@keyframes bump {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.14);
+  }
+}
+
+.bump {
+  animation: bump calc(0.35s * var(--anim, 1)) ease-out;
+}
+
+/* Winning seats shimmer for a moment. */
+@keyframes win-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px #34d399,
+      0 0 18px rgba(52, 211, 153, 0.7);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px #6ee7b7,
+      0 0 32px rgba(110, 231, 183, 0.9);
+  }
+}
+
+.glow-win {
+  animation: win-pulse calc(1.2s * var(--anim, 1)) ease-in-out 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+  }
 }
 
 @keyframes thinking {

@@ -2,7 +2,6 @@ import { cardToString } from '../core/cards';
 import { createRng, randomSeed, type Rng } from '../core/rng';
 import { db, newId } from '../data/db';
 import {
-  type Bucket,
   type Character,
   HAND_HISTORY_LIMIT,
   type HandRecord,
@@ -24,8 +23,7 @@ import {
   stakesForClass,
 } from '../games/holdem/stakes';
 import type { HandState } from '../games/holdem/types';
-import { emptyStats } from './characters';
-import { getSettings } from './characters';
+import { bumpBucket, emptyStats, getSettings } from './characters';
 import { reachedProfitLimit, type PokerGameId } from '../games/catalog';
 import { cpuBuyIn, deleteCpu, eligibleCpus, ensurePool } from './cpuPool';
 
@@ -70,7 +68,8 @@ export async function startSession(input: StartSessionInput): Promise<TableSessi
   if (buyIn < stake.minBuyIn || buyIn > stake.maxBuyIn) throw new Error('바이인 금액이 범위를 벗어났습니다.');
 
   return db.transaction('rw', ALL_TABLES, async () => {
-    if (await getActiveSession() || await db.rooms.where('active').equals(1).count()) throw new Error('이미 진행 중인 게임이 있습니다.');
+    if ((await getActiveSession()) || (await db.rooms.where('active').equals(1).count()))
+      throw new Error('이미 진행 중인 게임이 있습니다.');
     const player = await db.characters.get(playerId);
     if (!player || player.kind !== 'PLAYER') throw new Error('캐릭터를 찾을 수 없습니다.');
     if (player.status !== 'ACTIVE') throw new Error('파산한 캐릭터는 플레이할 수 없습니다.');
@@ -131,11 +130,6 @@ export function nextButton(session: TableSession): number {
   return after ?? inPlay[0];
 }
 
-function bump(map: Record<string, Bucket> | Partial<Record<string, Bucket>>, key: string, net: number) {
-  const b = map[key] ?? { hands: 0, net: 0 };
-  map[key] = { hands: b.hands + 1, net: b.net + net };
-}
-
 function updateOpponentModel(model: OpponentModel, hand: HandState, human: number): OpponentModel {
   const next = { ...model, hands: model.hands + 1 };
   if (didVpip(hand, human)) next.vpip++;
@@ -171,7 +165,7 @@ export interface RecordHandInput {
 /** Persists a finished hand: stacks, history, stats and the opponent model, atomically. */
 export async function recordHand({ session, hand, seatOfPlayer, seed }: RecordHandInput): Promise<TableSession> {
   const result = hand.result;
-  if (!result) throw new Error('Hand is not finished');
+  if (!result) throw new Error('아직 끝나지 않은 핸드입니다.');
   const human = seatOfPlayer.indexOf(0);
 
   return db.transaction('rw', ALL_TABLES, async () => {
@@ -256,10 +250,10 @@ export async function recordHand({ session, hand, seatOfPlayer, seed }: RecordHa
       bySeatCount: { ...s.bySeatCount },
       byGame: { ...s.byGame },
     };
-    bump(updated.byClass, session.cpuClass, net);
-    bump(updated.byStake, session.stakeId, net);
-    bump(updated.bySeatCount, String(hand.players.length), net);
-    bump(updated.byGame!, session.gameId, net);
+    bumpBucket(updated.byClass, session.cpuClass, net);
+    bumpBucket(updated.byStake, session.stakeId, net);
+    bumpBucket(updated.bySeatCount, String(hand.players.length), net);
+    bumpBucket(updated.byGame!, session.gameId, net);
     if (wentToShowdown && myHand && (!s.bestHand || myHand.score > s.bestHand.score)) {
       updated.bestHand = {
         category: myHand.category,
@@ -296,7 +290,10 @@ export async function rebuyPlayer(session: TableSession, amount: number): Promis
   return db.transaction('rw', db.characters, db.sessions, async () => {
     const player = await db.characters.get(session.playerId);
     const seat = session.seats[0]!;
-    if (reachedProfitLimit(seat.stack, session.initialBuyIn ?? seat.buyInTotal, seat.buyInTotal, session.profitMultiplier)) throw new Error('수익 목표를 달성했습니다. 정산 후 다시 입장해 주세요.');
+    if (
+      reachedProfitLimit(seat.stack, session.initialBuyIn ?? seat.buyInTotal, seat.buyInTotal, session.profitMultiplier)
+    )
+      throw new Error('수익 목표를 달성했습니다. 정산 후 다시 입장해 주세요.');
     if (!player) throw new Error('캐릭터를 찾을 수 없습니다.');
     if (amount < stake.minBuyIn || amount > player.balance || seat.stack + amount > stake.maxBuyIn) {
       throw new Error('리바이 금액이 올바르지 않습니다.');
@@ -481,9 +478,9 @@ async function recordAbandoned(session: TableSession, hand: InProgressHand, lost
   const byClass = { ...s.byClass };
   const byStake = { ...s.byStake };
   const byGame = { ...s.byGame };
-  bump(byClass, session.cpuClass, -lost);
-  bump(byStake, session.stakeId, -lost);
-  bump(byGame, session.gameId, -lost);
+  bumpBucket(byClass, session.cpuClass, -lost);
+  bumpBucket(byStake, session.stakeId, -lost);
+  bumpBucket(byGame, session.gameId, -lost);
   await db.stats.put({
     ...s,
     handsPlayed: s.handsPlayed + 1,

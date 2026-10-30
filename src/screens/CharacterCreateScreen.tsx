@@ -6,10 +6,17 @@ import { AVATARS } from '../data/names';
 import { createPlayer, listPlayers, NAME_MAX_LENGTH, updateSettings } from '../services/characters';
 import { Avatar, Button, Chips, cx, Page } from '../ui/components';
 import { useAsync } from '../ui/hooks';
+import { errorMessage } from '../core/errors';
 
 const INTRO: Record<CreateReason, { title: string; text: string }> = {
-  first: { title: '환영합니다!', text: '플레이할 캐릭터를 만들어 주세요. 로그인은 없고, 캐릭터마다 칩과 전적이 따로 저장됩니다.' },
-  allBankrupt: { title: '모든 캐릭터가 파산했습니다', text: '파산한 캐릭터로는 더 이상 플레이할 수 없어요. 새 캐릭터로 다시 시작하세요.' },
+  first: {
+    title: '환영합니다!',
+    text: '플레이할 캐릭터를 만들어 주세요. 로그인은 없고, 캐릭터마다 칩과 전적이 따로 저장됩니다.',
+  },
+  allBankrupt: {
+    title: '모든 캐릭터가 파산했습니다',
+    text: '파산한 캐릭터로는 더 이상 플레이할 수 없어요. 새 캐릭터로 다시 시작하세요.',
+  },
   new: { title: '새 캐릭터', text: '이름과 아바타를 고르세요.' },
 };
 
@@ -32,7 +39,7 @@ export function CharacterCreateScreen({ reason }: { reason: CreateReason }) {
       setSettings(await updateSettings({ lastCharacterId: c.id }));
       reset([{ name: 'characterSelect' }, { name: 'lobby' }]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -44,7 +51,11 @@ export function CharacterCreateScreen({ reason }: { reason: CreateReason }) {
       onBack={reason === 'new' ? back : exitApp}
       right={
         reason !== 'new' && (
-          <button className="rounded-full p-2 text-gray-300 active:bg-white/10" onClick={() => push({ name: 'settings' })} aria-label="설정">
+          <button
+            className="rounded-full p-2 text-gray-300 active:bg-white/10"
+            onClick={() => push({ name: 'settings' })}
+            aria-label="설정"
+          >
             <SettingsIcon className="h-5 w-5" />
           </button>
         )

@@ -1,10 +1,9 @@
-import { BarChart3, Bot, ChevronRight, Settings as SettingsIcon, Users } from 'lucide-react';
+import { BarChart3, Bot, ChevronRight, CircleHelp, Settings as SettingsIcon, Users } from 'lucide-react';
 import { useApp } from '../app/store';
 import { getCharacter, getStats } from '../services/characters';
 import { Avatar, Chips, Page, Section } from '../ui/components';
 import { useAsync } from '../ui/hooks';
 import { GAMES } from '../games/catalog';
-
 
 export function LobbyScreen() {
   const { playerId, push, back } = useApp();
@@ -14,16 +13,24 @@ export function LobbyScreen() {
     return player ? { player, stats } : null;
   }, [playerId]);
 
-  if (!data) return <Page title="로비" onBack={back}>{null}</Page>;
+  if (!data)
+    return (
+      <Page title="로비" onBack={back}>
+        {null}
+      </Page>
+    );
   const { player, stats } = data;
-  const winRate = stats.handsPlayed ? Math.round((stats.handsWon / stats.handsPlayed) * 100) : 0;
 
   return (
     <Page
       title="로비"
       onBack={back}
       right={
-        <button className="rounded-full p-2 text-gray-300 active:bg-white/10" onClick={() => push({ name: 'settings' })} aria-label="설정">
+        <button
+          className="rounded-full p-2 text-gray-300 active:bg-white/10"
+          onClick={() => push({ name: 'settings' })}
+          aria-label="설정"
+        >
           <SettingsIcon className="h-5 w-5" />
         </button>
       }
@@ -37,8 +44,8 @@ export function LobbyScreen() {
           </div>
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-          <Stat label="핸드" value={stats.handsPlayed.toLocaleString()} />
-          <Stat label="승률" value={`${winRate}%`} />
+          <Stat label="플레이" value={`${stats.handsPlayed.toLocaleString()}판`} />
+          <Stat label="최고 잔액" value={player.peakBalance.toLocaleString()} />
           <Stat
             label="손익"
             value={`${stats.netProfit >= 0 ? '+' : ''}${stats.netProfit.toLocaleString()}`}
@@ -67,9 +74,18 @@ export function LobbyScreen() {
       </Section>
 
       <Section title="메뉴">
-        <div className="grid grid-cols-3 gap-2">
-          <MenuButton icon={<BarChart3 className="h-5 w-5" />} label="내 전적" onClick={() => push({ name: 'stats', characterId: player.id })} />
+        <div className="grid grid-cols-4 gap-2">
+          <MenuButton
+            icon={<BarChart3 className="h-5 w-5" />}
+            label="내 전적"
+            onClick={() => push({ name: 'stats', characterId: player.id })}
+          />
           <MenuButton icon={<Bot className="h-5 w-5" />} label="상대 선수" onClick={() => push({ name: 'cpus' })} />
+          <MenuButton
+            icon={<CircleHelp className="h-5 w-5" />}
+            label="게임 방법"
+            onClick={() => push({ name: 'help' })}
+          />
           <MenuButton icon={<Users className="h-5 w-5" />} label="캐릭터 변경" onClick={back} />
         </div>
       </Section>

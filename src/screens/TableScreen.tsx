@@ -1,4 +1,4 @@
-import { ChevronUp, DoorOpen, ScrollText } from 'lucide-react';
+import { ChevronUp, ScrollText } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { startScreen } from '../app/boot';
 import { vibrate } from '../app/native';
@@ -12,11 +12,13 @@ import { legalActions, potTotal } from '../games/holdem/engine';
 import { stakeById } from '../games/holdem/stakes';
 import type { HandState, PlayerState } from '../games/holdem/types';
 import { TableRunner, type TableView } from '../services/tableRunner';
-import { Button, Chips, ClassBadge, ConfirmModal, cx, EmptyCardSlot, fmt, Modal, PlayingCard } from '../ui/components';
-import { useBackButton } from '../ui/hooks';
+import { Button, Chips, ClassBadge, cx, EmptyCardSlot, fmt, PlayingCard } from '../ui/components';
 import { gameName, profitTarget } from '../games/catalog';
+import { FloatingNet, GameHeader, LeaveConfirm, SessionEndModal, useLeave, type SessionSummary } from '../ui/game';
+import { HelpModal, TutorialModal, useTutorial } from '../ui/help';
 import { RoundResult } from '../ui/RoundResult';
 import { pokerResult } from '../ui/results';
+import { errorMessage } from '../core/errors';
 
 type Pos = { top: string; left: string };
 
@@ -52,6 +54,17 @@ function thinkDelay(settings: Settings): number {
   return (lo + Math.random() * (hi - lo)) * speed;
 }
 
+/**
+ * Stagger for the opening deal: one card at a time around the table from the
+ * small blind, like a real dealer. Cards dealt later (draw replacements) come at once.
+ */
+function dealDelay(hand: HandState, index: number, card: number): number {
+  if (hand.street !== 'PREFLOP' || index < 0) return 0;
+  const n = hand.players.length;
+  const order = card * n + ((index - hand.sbIndex + n) % n);
+  return order * (hand.variant === 'draw' ? 40 : 80);
+}
+
 function preflopLabel(hole: Card[]): string {
   if (hole.length < 2) return '';
   const [a, b] = hole;
@@ -67,8 +80,9 @@ function preflopLabel(hole: Card[]): string {
 export function TableScreen({ sessionId }: { sessionId: string }) {
   const { settings, reset, showToast } = useApp();
   const [view, setView] = useState<TableView | null>(null);
-  const [confirmLeave, setConfirmLeave] = useState(false);
   const [showLog, setShowLog] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [ended, setEnded] = useState<SessionSummary | null>(null);
   const [balance, setBalance] = useState(0);
   const [drawSelection, setDrawSelection] = useState<number[]>([]);
   const runnerRef = useRef<TableRunner | null>(null);
@@ -87,7 +101,8 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
       runner = new TableRunner(session, { thinkMs: () => thinkDelay(settingsRef.current), onChange: setView });
       runnerRef.current = runner;
       setView(runner.view());
-      void runner.startNextHand();
+      // On a first visit the tutorial is shown first; closing it deals the first hand.
+      if ((settingsRef.current.tutorialsSeen ?? []).includes(session.gameId)) void runner.startNextHand();
     }, 0);
     return () => {
       clearTimeout(timer);
@@ -103,13 +118,35 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
   }, [playerId, phase]);
 
   useFeedback(view, settings);
-  useEffect(() => { setDrawSelection([]); }, [view?.hand?.street, view?.session.handsPlayed]);
+  useEffect(() => {
+    setDrawSelection([]);
+  }, [view?.hand?.street, view?.session.handsPlayed]);
 
-  const leave = async () => {
-    setConfirmLeave(false);
-    await runnerRef.current?.leave();
+  const tutorial = useTutorial(view?.session.gameId);
+  const finishTutorial = () => {
+    tutorial.finish();
+    void runnerRef.current?.startNextHand();
   };
-  useBackButton(() => (view?.phase === 'ended' ? undefined : setConfirmLeave(true)));
+
+  const leave = useLeave(
+    async () => {
+      const runner = runnerRef.current;
+      if (!runner) throw new Error('테이블을 준비하는 중입니다.');
+      return { result: await runner.leave(), view: runner.view() };
+    },
+    ({ result, view: last }) => {
+      const seat = last.session.seats[0]!;
+      setEnded({
+        name: seat.name,
+        bankrupt: result.playerBankrupt,
+        roundLabel: '핸드',
+        rounds: last.session.handsPlayed,
+        buyIn: seat.buyInTotal,
+        cashOut: result.cashOut,
+        abandonedLoss: result.abandonedLoss,
+      });
+    },
+  );
 
   if (!view) {
     return <div className="flex h-full items-center justify-center text-sm text-gray-500">테이블 준비 중…</div>;
@@ -123,30 +160,34 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
   const highlight = new Set<Card>(result?.showdown ? [...winners].flatMap((w) => result.hands[w]?.best ?? []) : []);
   const human = playerIndexOfSeat(0);
   const me = human >= 0 && hand ? hand.players[human] : null;
-  const myCommitted = me ? me.contributed : 0;
   const handLive = !!hand && !result;
+  const inHand = handLive && !!me && !me.folded;
 
   return (
     <div className="mx-auto flex h-full min-h-0 max-w-lg flex-col overflow-hidden">
-      <header className="safe-top flex shrink-0 items-center gap-2 px-3 pb-1.5">
-        <button
-          className="flex items-center gap-1 rounded-lg border border-gray-800 bg-gray-900 px-2.5 py-1.5 text-xs font-bold text-gray-300 active:bg-gray-800"
-          onClick={() => setConfirmLeave(true)}
-        >
-          <DoorOpen className="h-4 w-4" /> 일어나기
-        </button>
-        <div className="flex flex-1 items-center justify-center gap-1.5 text-xs">
-          <ClassBadge cls={session.cpuClass} />
-          <span className="font-bold">{stake.name}</span>
-          <span className="tabular-nums text-gray-400">
-            {fmt(session.sb)}/{fmt(session.bb)}
-          </span>
-        </div>
-        <div className="rounded-lg bg-gray-900 px-2 py-1.5 text-[11px] tabular-nums text-gray-400">#{session.handsPlayed + (handLive ? 1 : 0)}</div>
-      </header>
+      <GameHeader
+        onLeave={leave.ask}
+        leaveDisabled={leave.leaving}
+        onHelp={() => setShowHelp(true)}
+        right={
+          <div className="rounded-lg bg-gray-900 px-2 py-1.5 text-[11px] tabular-nums text-gray-400">
+            #{session.handsPlayed + (handLive ? 1 : 0)}
+          </div>
+        }
+      >
+        <ClassBadge cls={session.cpuClass} />
+        <span className="font-bold">{stake.name}</span>
+        <span className="tabular-nums text-gray-400">
+          {fmt(session.sb)}/{fmt(session.bb)}
+        </span>
+      </GameHeader>
       <div className="flex shrink-0 items-center justify-between gap-2 px-3 pb-2 text-[10px] text-gray-500">
         <span>{gameName(session.gameId)}</span>
-        <span>{session.profitMultiplier == null ? '수익 한도 없음' : `순이익 ${session.profitMultiplier}배 · 목표 ${fmt(profitTarget(session.initialBuyIn ?? session.seats[0]!.buyInTotal, session.seats[0]!.buyInTotal, session.profitMultiplier)!)}칩`}</span>
+        <span>
+          {session.profitMultiplier == null
+            ? '수익 한도 없음'
+            : `순이익 ${session.profitMultiplier}배 · 목표 ${fmt(profitTarget(session.initialBuyIn ?? session.seats[0]!.buyInTotal, session.seats[0]!.buyInTotal, session.profitMultiplier)!)}칩`}
+        </span>
       </div>
 
       {/* Table */}
@@ -171,21 +212,20 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
             />
           );
         })}
-        <div className={cx('table-center absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2', session.gameId === 'draw' && 'table-center-draw')}>
+        <div
+          className={cx(
+            'table-center absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2',
+            session.gameId === 'draw' && 'table-center-draw',
+          )}
+        >
           <PotView hand={hand} />
           <div data-testid="community-cards" className="flex min-h-14 gap-1">
-            {session.gameId === 'draw' ? <div className="flex w-44 items-center justify-center text-center text-xs text-emerald-100/60">{hand?.street === 'DRAW' ? '카드 교환 중' : result ? '쇼다운' : '비공개 카드 5장 · 교환 1회'}</div> : Array.from({ length: 5 }, (_, i) =>
-              hand && hand.board[i] !== undefined ? (
-                <PlayingCard
-                  key={`${i}-${hand.board[i]}`}
-                  card={hand.board[i]}
-                  size="board"
-                  highlight={highlight.has(hand.board[i])}
-                  dim={highlight.size > 0 && !highlight.has(hand.board[i])}
-                />
-              ) : (
-                <EmptyCardSlot key={i} size="board" />
-              ),
+            {session.gameId === 'draw' ? (
+              <div className="flex w-44 items-center justify-center text-center text-xs text-emerald-100/60">
+                {hand?.street === 'DRAW' ? '카드 교환 중' : result ? '쇼다운' : '비공개 카드 5장 · 교환 1회'}
+              </div>
+            ) : (
+              <BoardCards hand={hand} highlight={highlight} />
             )}
           </div>
         </div>
@@ -203,7 +243,14 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
           isWinner={human >= 0 && winners.has(human)}
           highlight={highlight}
           drawSelection={drawSelection}
-          onToggleDraw={view.humanTurn && hand?.street === 'DRAW' ? (index) => setDrawSelection((selected) => selected.includes(index) ? selected.filter((i) => i !== index) : [...selected, index]) : undefined}
+          onToggleDraw={
+            view.humanTurn && hand?.street === 'DRAW'
+              ? (index) =>
+                  setDrawSelection((selected) =>
+                    selected.includes(index) ? selected.filter((i) => i !== index) : [...selected, index],
+                  )
+              : undefined
+          }
         />
       </div>
 
@@ -216,41 +263,33 @@ export function TableScreen({ sessionId }: { sessionId: string }) {
             drawSelection={drawSelection}
             onAct={(a) => runnerRef.current?.humanAct(a)}
             onNext={() => void runnerRef.current?.startNextHand()}
-            onRebuy={(amount) =>
-              runnerRef.current?.rebuy(amount).catch((e: unknown) => showToast(e instanceof Error ? e.message : String(e)))
-            }
-            onLeave={leave}
+            onRebuy={(amount) => runnerRef.current?.rebuy(amount).catch((e: unknown) => showToast(errorMessage(e)))}
+            onLeave={leave.leave}
+            leaving={leave.leaving}
           />
         </div>
       </div>
 
-      {confirmLeave && (
-        <ConfirmModal
-          title="테이블에서 일어날까요?"
-          message={
-            handLive && me && !me.folded && myCommitted > 0 ? (
-              <>
-                진행 중인 핸드는 <b>폴드</b> 처리되고, 이미 낸 <b className="text-yellow-400">{fmt(myCommitted)}</b>칩은 잃습니다.
-              </>
-            ) : handLive && me && !me.folded ? (
-              '진행 중인 핸드는 폴드 처리됩니다. 남은 칩은 지갑으로 돌아갑니다.'
-            ) : (
-              '남은 칩은 지갑으로 돌아갑니다.'
-            )
-          }
-          confirmLabel="일어나기"
-          onConfirm={leave}
-          onCancel={() => setConfirmLeave(false)}
+      {leave.confirming && (
+        <LeaveConfirm
+          stake={{
+            inProgress: inHand,
+            wagered: inHand ? me.contributed : 0,
+            remaining: me ? me.stack : session.seats[0]!.stack,
+            settledAs: '폴드',
+          }}
+          onConfirm={leave.leave}
+          onCancel={leave.cancel}
         />
       )}
-
-      {view.phase === 'ended' && view.endResult && (
-        <EndModal
-          view={view}
-          onDone={async () => {
-            if (view.endResult!.playerBankrupt) reset([await startScreen()]);
-            else reset([{ name: 'characterSelect' }, { name: 'lobby' }]);
-          }}
+      {showHelp && <HelpModal gameId={session.gameId} onClose={() => setShowHelp(false)} />}
+      {tutorial.open && <TutorialModal gameId={session.gameId} onDone={finishTutorial} />}
+      {ended && (
+        <SessionEndModal
+          summary={ended}
+          onDone={async () =>
+            reset(ended.bankrupt ? [await startScreen()] : [{ name: 'characterSelect' }, { name: 'lobby' }])
+          }
         />
       )}
     </div>
@@ -291,10 +330,39 @@ function PotView({ hand }: { hand: HandState | null }) {
   if (!hand) return <div className="h-6" />;
   const total = potTotal(hand);
   return (
-    <div className="rounded-full border border-yellow-500/40 bg-black/60 px-3 py-0.5 text-sm font-extrabold">
+    <div
+      key={total}
+      className="bump rounded-full border border-yellow-500/40 bg-black/60 px-3 py-0.5 text-sm font-extrabold"
+    >
       <span className="mr-1 text-[10px] text-gray-400">POT</span>
       <span className="tabular-nums text-yellow-400">{fmt(total)}</span>
     </div>
+  );
+}
+
+/** Community cards. Newly dealt cards come one after another, also when an all-in runs the board out. */
+function BoardCards({ hand, highlight }: { hand: HandState | null; highlight: Set<Card> }) {
+  const shownBefore = useRef({ key: -1, count: 0 });
+  const handKey = hand?.drawSeed ?? -1;
+  const board = hand?.board ?? [];
+  const before = shownBefore.current.key === handKey ? shownBefore.current.count : 0;
+  useEffect(() => {
+    shownBefore.current = { key: handKey, count: board.length };
+  }, [handKey, board.length]);
+
+  return Array.from({ length: 5 }, (_, i) =>
+    board[i] !== undefined ? (
+      <PlayingCard
+        key={`${handKey}-${i}-${board[i]}`}
+        card={board[i]}
+        size="board"
+        delay={i < before ? 0 : (i - before) * 160 + (i >= 3 && before < 3 ? 260 : 0)}
+        highlight={highlight.has(board[i])}
+        dim={highlight.size > 0 && !highlight.has(board[i])}
+      />
+    ) : (
+      <EmptyCardSlot key={i} size="board" />
+    ),
   );
 }
 
@@ -371,10 +439,23 @@ function OpponentSeat({
           (player?.folded || !player) && 'opacity-45',
         )}
       >
+        {hand?.result && player && hand.result.net[index] > 0 && (
+          <FloatingNet key={hand.drawSeed} net={hand.result.net[index]} className="-top-3" />
+        )}
         <div className={cx('flex h-9 items-center', hand?.variant === 'draw' ? '-space-x-0.5' : '-space-x-2')}>
           {player && !player.folded ? (
             player.hole.length ? (
-              player.hole.map((c, k) => <PlayingCard key={k} card={c} size={hand?.variant === 'draw' ? 'drawOpponent' : 'xs'} faceDown={!reveal} highlight={reveal && highlight.has(c)} />)
+              player.hole.map((c, k) => (
+                <PlayingCard
+                  key={`${hand!.drawSeed}-${k}-${c}`}
+                  card={c}
+                  size={hand?.variant === 'draw' ? 'drawOpponent' : 'xs'}
+                  faceDown={!reveal}
+                  flip={reveal}
+                  delay={reveal ? k * 90 : dealDelay(hand!, index, k)}
+                  highlight={reveal && highlight.has(c)}
+                />
+              ))
             ) : (
               <>
                 <PlayingCard size="xs" faceDown />
@@ -389,15 +470,26 @@ function OpponentSeat({
           {player && !player.folded && <span className="text-sm">{record.avatar}</span>}
           <span className="truncate text-[11px] font-bold">{record.name}</span>
         </div>
-        <span className="text-[11px] font-extrabold tabular-nums text-yellow-400">{fmt(player ? player.stack : record.stack)}</span>
+        <span className="text-[11px] font-extrabold tabular-nums text-yellow-400">
+          {fmt(player ? player.stack : record.stack)}
+        </span>
         {reveal && hand?.result?.hands[index] && (
-          <span className="mt-0.5 truncate text-[9px] font-bold text-emerald-300">{hand.result.hands[index]!.name}</span>
+          <span className="mt-0.5 truncate text-[9px] font-bold text-emerald-300">
+            {hand.result.hands[index]!.name}
+          </span>
         )}
       </div>
       <div className="mt-0.5 flex h-4 items-center gap-1">
         {hand?.result && player ? (
-          <span className={cx('rounded-full border px-2 text-[10px] font-extrabold', isWinner ? 'border-yellow-400/60 bg-yellow-950 text-yellow-200' : 'border-gray-600 bg-gray-950 text-gray-300')}>
-            {isWinner ? hand.result.net[index] > 0 ? '승리' : '팟 획득' : player.folded ? '폴드' : '패배'}
+          <span
+            className={cx(
+              'rounded-full border px-2 text-[10px] font-extrabold',
+              isWinner
+                ? 'border-yellow-400/60 bg-yellow-950 text-yellow-200'
+                : 'border-gray-600 bg-gray-950 text-gray-300',
+            )}
+          >
+            {isWinner ? (hand.result.net[index] > 0 ? '승리' : '팟 획득') : player.folded ? '폴드' : '패배'}
           </span>
         ) : thinking ? (
           <span className="thinking text-[10px] font-bold text-yellow-300">생각 중…</span>
@@ -448,13 +540,36 @@ function MySeat({
         player?.folded && 'opacity-60',
       )}
     >
+      {hand?.result && index >= 0 && (
+        <FloatingNet key={hand.drawSeed} net={hand.result.net[index]} className="-top-4" />
+      )}
       <PositionChips hand={hand} index={index} className="absolute -top-9 right-3 z-20 flex gap-1.5" />
       <div className="flex gap-1">
         {player?.hole.length ? (
           player.hole.map((c, k) => (
-            <button key={k} disabled={!onToggleDraw} onClick={() => onToggleDraw?.(k)} aria-label={`카드 ${k + 1} 교환 선택`} aria-pressed={drawSelection.includes(k)} className={cx('relative rounded-lg', drawSelection.includes(k) && 'outline-2 outline-offset-2 outline-yellow-400')}>
-              <PlayingCard card={c} size={hand?.variant === 'draw' ? 'board' : 'lg'} dim={player.folded || (highlight.size > 0 && !highlight.has(c))} highlight={highlight.has(c)} />
-              {drawSelection.includes(k) && <span className="absolute inset-x-0 bottom-0 rounded-b-md bg-yellow-400 py-0.5 text-[9px] font-bold text-black">교환</span>}
+            <button
+              key={`${hand!.drawSeed}-${k}-${c}`}
+              disabled={!onToggleDraw}
+              onClick={() => onToggleDraw?.(k)}
+              aria-label={`카드 ${k + 1} 교환 선택`}
+              aria-pressed={drawSelection.includes(k)}
+              className={cx(
+                'relative rounded-lg',
+                drawSelection.includes(k) && 'outline-2 outline-offset-2 outline-yellow-400',
+              )}
+            >
+              <PlayingCard
+                card={c}
+                delay={dealDelay(hand!, index, k)}
+                size={hand?.variant === 'draw' ? 'board' : 'lg'}
+                dim={player.folded || (highlight.size > 0 && !highlight.has(c))}
+                highlight={highlight.has(c)}
+              />
+              {drawSelection.includes(k) && (
+                <span className="absolute inset-x-0 bottom-0 rounded-b-md bg-yellow-400 py-0.5 text-[9px] font-bold text-black">
+                  교환
+                </span>
+              )}
             </button>
           ))
         ) : (
@@ -468,7 +583,9 @@ function MySeat({
         <div className="flex items-center gap-1.5">
           <span className="text-lg">{record.avatar}</span>
           <span className="truncate text-sm font-bold">{record.name}</span>
-          <span className="shrink-0 rounded border border-yellow-400/30 px-1 text-[9px] font-bold text-yellow-200">나</span>
+          <span className="shrink-0 rounded border border-yellow-400/30 px-1 text-[9px] font-bold text-yellow-200">
+            나
+          </span>
         </div>
         <Chips amount={player ? player.stack : record.stack} className="text-base" />
         <div className="flex h-5 items-center gap-1.5">
@@ -482,7 +599,17 @@ function MySeat({
   );
 }
 
-function LogStrip({ view, open, onToggle, onClose }: { view: TableView; open: boolean; onToggle: () => void; onClose: () => void }) {
+function LogStrip({
+  view,
+  open,
+  onToggle,
+  onClose,
+}: {
+  view: TableView;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -505,11 +632,23 @@ function LogStrip({ view, open, onToggle, onClose }: { view: TableView; open: bo
   }, [open, view.log]);
   const last = view.log.at(-1);
   const toneClass = (t: string) =>
-    t === 'win' ? 'text-yellow-300 font-bold' : t === 'street' ? 'text-emerald-300' : t === 'system' ? 'text-gray-500' : t === 'mine' ? 'text-sky-300' : 'text-gray-300';
+    t === 'win'
+      ? 'text-yellow-300 font-bold'
+      : t === 'street'
+        ? 'text-emerald-300'
+        : t === 'system'
+          ? 'text-gray-500'
+          : t === 'mine'
+            ? 'text-sky-300'
+            : 'text-gray-300';
   return (
     <div ref={containerRef} className="relative mb-2 h-8 rounded-xl border border-gray-800 bg-gray-950/95">
       {open && (
-        <div id="hand-history-panel" ref={ref} className="absolute inset-x-0 bottom-full z-40 mb-1 max-h-40 space-y-0.5 overflow-y-auto rounded-xl border border-gray-700 bg-gray-950 p-3 text-[11px]">
+        <div
+          id="hand-history-panel"
+          ref={ref}
+          className="absolute inset-x-0 bottom-full z-40 mb-1 max-h-40 space-y-0.5 overflow-y-auto rounded-xl border border-gray-700 bg-gray-950 p-3 text-[11px]"
+        >
           {view.log.map((l) => (
             <div key={l.id} className={toneClass(l.tone)}>
               {l.text}
@@ -517,7 +656,13 @@ function LogStrip({ view, open, onToggle, onClose }: { view: TableView; open: bo
           ))}
         </div>
       )}
-      <button className="flex h-full w-full items-center gap-2 px-3 text-left text-[11px]" onClick={onToggle} aria-expanded={open} aria-controls="hand-history-panel" aria-label="핸드 기록">
+      <button
+        className="flex h-full w-full items-center gap-2 px-3 text-left text-[11px]"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls="hand-history-panel"
+        aria-label="핸드 기록"
+      >
         <ScrollText className="h-3.5 w-3.5 shrink-0 text-gray-500" />
         <span className={cx('flex-1 truncate', last && toneClass(last.tone))}>{last?.text ?? ''}</span>
         <ChevronUp className={cx('h-3.5 w-3.5 text-gray-500 transition', open && 'rotate-180')} />
@@ -533,6 +678,7 @@ function ActionArea({
   onNext,
   onRebuy,
   onLeave,
+  leaving,
   drawSelection,
 }: {
   view: TableView;
@@ -541,28 +687,45 @@ function ActionArea({
   onNext: () => void;
   onRebuy: (amount: number) => void;
   onLeave: () => void;
+  leaving: boolean;
   drawSelection: number[];
 }) {
   const { hand, phase, session } = view;
   const stake = stakeById(session.stakeId);
   const human = view.seatOfPlayer.indexOf(0);
   const summary = hand ? pokerResult(hand, human) : null;
-  if (phase === 'profitLimit') return (
-    <div className="flex h-full flex-col justify-end gap-2">
-      {summary && <RoundResult summary={summary} compact />}
-      <p className="text-center text-[11px] text-yellow-200">수익 목표 달성 · 전액 정산 후 새 방에 입장해 주세요.</p>
-      <Button className="w-full" variant="primary" onClick={onLeave}>정산하고 나가기</Button>
-    </div>
-  );
+  if (phase === 'profitLimit')
+    return (
+      <div className="flex h-full flex-col justify-end gap-2">
+        {summary && (
+          <div className="result-in">
+            <RoundResult summary={summary} compact />
+          </div>
+        )}
+        <p className="text-center text-[11px] text-yellow-200">수익 목표 달성 · 전액 정산 후 새 방에 입장해 주세요.</p>
+        <Button className="w-full" variant="primary" disabled={leaving} onClick={onLeave}>
+          정산하고 나가기
+        </Button>
+      </div>
+    );
 
   if (phase === 'needRebuy') {
-    return <RebuyPanel balance={balance} stake={stake} stack={session.seats[0]!.stack} onRebuy={onRebuy} onLeave={onLeave} />;
+    return (
+      <RebuyPanel
+        balance={balance}
+        stake={stake}
+        stack={session.seats[0]!.stack}
+        onRebuy={onRebuy}
+        onLeave={onLeave}
+        leaving={leaving}
+      />
+    );
   }
   if (phase === 'noOpponents') {
     return (
       <div className="space-y-2 pb-1">
         <p className="text-center text-sm text-gray-400">함께 플레이할 수 있는 상대 선수가 없습니다.</p>
-        <Button variant="primary" className="w-full" onClick={onLeave}>
+        <Button variant="primary" className="w-full" disabled={leaving} onClick={onLeave}>
           일어나기
         </Button>
       </div>
@@ -571,26 +734,37 @@ function ActionArea({
   if (phase === 'handOver' && summary) {
     return (
       <div className="flex h-full flex-col justify-end gap-2">
-        <RoundResult summary={summary} />
+        <div key={hand!.drawSeed} className="result-in">
+          <RoundResult summary={summary} />
+        </div>
         <Button variant="primary" className="h-14 w-full text-base" onClick={onNext}>
           다음 핸드
         </Button>
       </div>
     );
   }
-  if (view.humanTurn && hand?.street === 'DRAW') return (
-    <div className="space-y-3 pb-1 text-center">
-      <p className="text-sm text-gray-300">내 카드에서 교환할 카드를 누르세요 (0~5장).</p>
-      <Button className="w-full" variant="primary" onClick={() => onAct({ type: 'draw', indices: drawSelection })}>{drawSelection.length ? `${drawSelection.length}장 교환` : '모두 유지'}</Button>
-    </div>
-  );
+  if (view.humanTurn && hand?.street === 'DRAW')
+    return (
+      <div className="space-y-3 pb-1 text-center">
+        <p className="text-sm text-gray-300">내 카드에서 교환할 카드를 누르세요 (0~5장).</p>
+        <Button className="w-full" variant="primary" onClick={() => onAct({ type: 'draw', indices: drawSelection })}>
+          {drawSelection.length ? `${drawSelection.length}장 교환` : '모두 유지'}
+        </Button>
+      </div>
+    );
   if (view.humanTurn && hand) return <BetControls hand={hand} onAct={onAct} />;
 
   const thinking = view.thinkingSeat !== null ? session.seats[view.thinkingSeat]?.name : null;
   const folded = human >= 0 && hand?.players[human].folded;
   return (
     <div className="flex h-14 items-center justify-center text-sm text-gray-500">
-      {phase === 'starting' ? '카드를 섞는 중…' : folded ? '폴드했습니다 · 핸드 진행 중' : thinking ? `${thinking} 차례` : '…'}
+      {phase === 'starting'
+        ? '카드를 섞는 중…'
+        : folded
+          ? '폴드했습니다 · 핸드 진행 중'
+          : thinking
+            ? `${thinking} 차례`
+            : '…'}
     </div>
   );
 }
@@ -623,7 +797,10 @@ function BetControls({ hand, onAct }: { hand: HandState; onAct: (a: Parameters<T
     <div className="grid h-full min-h-0 grid-rows-[1fr_56px] gap-2">
       <div
         aria-hidden={!raiseOpen || !legal.canRaise}
-        className={cx('flex min-h-0 flex-col justify-between rounded-xl border border-gray-800 bg-gray-900 p-2.5', (!raiseOpen || !legal.canRaise) && 'invisible')}
+        className={cx(
+          'flex min-h-0 flex-col justify-between rounded-xl border border-gray-800 bg-gray-900 p-2.5',
+          (!raiseOpen || !legal.canRaise) && 'invisible',
+        )}
       >
         <div className="mb-1.5 flex items-center justify-between text-xs">
           <span className="text-gray-400">{isBet ? '벳' : '레이즈'} 금액</span>
@@ -681,10 +858,7 @@ function BetControls({ hand, onAct }: { hand: HandState; onAct: (a: Parameters<T
           </button>
         )}
         {raiseOpen ? (
-          <button
-            onClick={() => onAct({ type: 'raise', to: amount })}
-            className="poker-action poker-action-raise"
-          >
+          <button onClick={() => onAct({ type: 'raise', to: amount })} className="poker-action poker-action-raise">
             {amount >= legal.maxRaiseTo ? '올인' : isBet ? '벳' : '레이즈'}
             <span className="poker-action-amount">{fmt(amount)}</span>
           </button>
@@ -708,16 +882,20 @@ function RebuyPanel({
   stack,
   onRebuy,
   onLeave,
+  leaving,
 }: {
   balance: number;
   stake: ReturnType<typeof stakeById>;
   stack: number;
   onRebuy: (amount: number) => void;
   onLeave: () => void;
+  leaving: boolean;
 }) {
   const max = Math.min(balance, stake.maxBuyIn - stack);
   const can = max >= stake.minBuyIn;
-  const [amount, setAmount] = useState(() => (can ? Math.min(max, Math.max(stake.minBuyIn, Math.round(stake.maxBuyIn / 2 / stake.bb) * stake.bb)) : 0));
+  const [amount, setAmount] = useState(() =>
+    can ? Math.min(max, Math.max(stake.minBuyIn, Math.round(stake.maxBuyIn / 2 / stake.bb) * stake.bb)) : 0,
+  );
   return (
     <div className="space-y-2 pb-1">
       <p className="text-center text-sm font-bold text-red-300">칩을 모두 잃었습니다</p>
@@ -727,9 +905,19 @@ function RebuyPanel({
             <span>리바이 (지갑 {fmt(balance)})</span>
             <Chips amount={amount} />
           </div>
-          <input type="range" className="w-full" min={stake.minBuyIn} max={max} step={stake.bb} value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
+          <input
+            type="range"
+            className="w-full"
+            min={stake.minBuyIn}
+            max={max}
+            step={stake.bb}
+            value={amount}
+            onChange={(e) => setAmount(Number(e.target.value))}
+          />
           <div className="grid grid-cols-2 gap-2">
-            <Button onClick={onLeave}>일어나기</Button>
+            <Button disabled={leaving} onClick={onLeave}>
+              일어나기
+            </Button>
             <Button variant="primary" onClick={() => onRebuy(amount)}>
               리바이
             </Button>
@@ -737,57 +925,14 @@ function RebuyPanel({
         </>
       ) : (
         <>
-          <p className="text-center text-xs text-gray-500">지갑 잔액이 최소 바이인({fmt(stake.minBuyIn)})보다 적어 리바이할 수 없습니다.</p>
-          <Button variant="primary" className="w-full" onClick={onLeave}>
+          <p className="text-center text-xs text-gray-500">
+            지갑 잔액이 최소 바이인({fmt(stake.minBuyIn)})보다 적어 리바이할 수 없습니다.
+          </p>
+          <Button variant="primary" className="w-full" disabled={leaving} onClick={onLeave}>
             일어나기
           </Button>
         </>
       )}
-    </div>
-  );
-}
-
-function EndModal({ view, onDone }: { view: TableView; onDone: () => void }) {
-  const r = view.endResult!;
-  const seat = view.session.seats[0]!;
-  const net = r.cashOut - seat.buyInTotal;
-  return (
-    <Modal>
-      {r.playerBankrupt ? (
-        <>
-          <div className="text-center text-5xl">💀</div>
-          <h2 className="mt-2 text-center text-xl font-extrabold">파산했습니다</h2>
-          <p className="mt-2 text-center text-sm text-gray-400">
-            <b>{seat.name}</b>은(는) 더 이상 플레이할 수 없습니다. 전적은 계속 볼 수 있어요. 새 캐릭터로 다시 도전하세요.
-          </p>
-        </>
-      ) : (
-        <>
-          <h2 className="text-center text-xl font-extrabold">게임 종료</h2>
-          <div className="mt-4 space-y-1.5 text-sm">
-            <Row label="플레이한 핸드" value={`${view.session.handsPlayed}`} />
-            <Row label="바이인" value={fmt(seat.buyInTotal)} />
-            <Row label="정산" value={fmt(r.cashOut)} />
-            <Row
-              label="손익"
-              value={`${net >= 0 ? '+' : ''}${fmt(net)}`}
-              tone={net > 0 ? 'text-emerald-400' : net < 0 ? 'text-red-400' : undefined}
-            />
-          </div>
-        </>
-      )}
-      <Button variant="primary" className="mt-5 w-full" onClick={onDone}>
-        {r.playerBankrupt ? '확인' : '로비로'}
-      </Button>
-    </Modal>
-  );
-}
-
-function Row({ label, value, tone }: { label: string; value: string; tone?: string }) {
-  return (
-    <div className="flex justify-between">
-      <span className="text-gray-400">{label}</span>
-      <span className={cx('font-bold tabular-nums', tone)}>{value}</span>
     </div>
   );
 }

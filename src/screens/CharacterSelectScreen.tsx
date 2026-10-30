@@ -46,7 +46,11 @@ export function CharacterSelectScreen() {
       title="누구로 플레이할까요?"
       onBack={canGoBack ? back : () => setConfirmExit(true)}
       right={
-        <button className="rounded-full p-2 text-gray-300 active:bg-white/10" onClick={() => push({ name: 'settings' })} aria-label="설정">
+        <button
+          className="rounded-full p-2 text-gray-300 active:bg-white/10"
+          onClick={() => push({ name: 'settings' })}
+          aria-label="설정"
+        >
           <SettingsIcon className="h-5 w-5" />
         </button>
       }
@@ -74,12 +78,17 @@ export function CharacterSelectScreen() {
                 </div>
                 <Chips amount={player.balance} className="text-sm" />
                 <div className="text-[11px] text-gray-500">
-                  {stats.handsPlayed}핸드 · 승률 {stats.handsPlayed ? Math.round((stats.handsWon / stats.handsPlayed) * 100) : 0}%
+                  {stats.handsPlayed}핸드 · 승률{' '}
+                  {stats.handsPlayed ? Math.round((stats.handsWon / stats.handsPlayed) * 100) : 0}%
                 </div>
               </div>
               <ChevronRight className="h-5 w-5 text-gray-600" />
             </button>
-            <button className="rounded-full p-2 text-gray-600 active:bg-white/10" onClick={() => setDeleting(player)} aria-label="삭제">
+            <button
+              className="rounded-full p-2 text-gray-600 active:bg-white/10"
+              onClick={() => setDeleting(player)}
+              aria-label="삭제"
+            >
               <Trash2 className="h-4 w-4" />
             </button>
           </div>
@@ -88,13 +97,20 @@ export function CharacterSelectScreen() {
 
       {bankrupt.length > 0 && (
         <div className="mt-6">
-          <button className="flex w-full items-center gap-1 text-xs font-bold text-gray-500" onClick={() => setShowBankrupt((v) => !v)}>
-            <ChevronDown className={cx('h-4 w-4 transition', !bankruptOpen && '-rotate-90')} /> 파산한 캐릭터 {bankrupt.length}
+          <button
+            className="flex w-full items-center gap-1 text-xs font-bold text-gray-500"
+            onClick={() => setShowBankrupt((v) => !v)}
+          >
+            <ChevronDown className={cx('h-4 w-4 transition', !bankruptOpen && '-rotate-90')} /> 파산한 캐릭터{' '}
+            {bankrupt.length}
           </button>
           {bankruptOpen && (
             <div className="mt-2 space-y-2">
               {bankrupt.map(({ player, stats }) => (
-                <div key={player.id} className="flex items-center gap-3 rounded-2xl border border-gray-800/60 bg-gray-900/50 p-3">
+                <div
+                  key={player.id}
+                  className="flex items-center gap-3 rounded-2xl border border-gray-800/60 bg-gray-900/50 p-3"
+                >
                   <button
                     className="flex min-w-0 flex-1 items-center gap-3 text-left"
                     onClick={() => push({ name: 'stats', characterId: player.id })}
@@ -109,7 +125,11 @@ export function CharacterSelectScreen() {
                     </div>
                     <span className="text-[11px] text-gray-500">전적 보기</span>
                   </button>
-                  <button className="rounded-full p-2 text-gray-700 active:bg-white/10" onClick={() => setDeleting(player)} aria-label="삭제">
+                  <button
+                    className="rounded-full p-2 text-gray-700 active:bg-white/10"
+                    onClick={() => setDeleting(player)}
+                    aria-label="삭제"
+                  >
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
@@ -134,7 +154,13 @@ export function CharacterSelectScreen() {
         />
       )}
       {confirmExit && (
-        <ConfirmModal title="앱 종료" message="게임을 종료할까요?" confirmLabel="종료" onConfirm={exitApp} onCancel={() => setConfirmExit(false)} />
+        <ConfirmModal
+          title="앱 종료"
+          message="게임을 종료할까요?"
+          confirmLabel="종료"
+          onConfirm={exitApp}
+          onCancel={() => setConfirmExit(false)}
+        />
       )}
     </Page>
   );

@@ -43,7 +43,8 @@ export function lowBotDecide(view: HandState, ctx: BotContext): Action {
 
   const cat = evaluate([...me.hole, ...view.board], false).category;
   if (toCall === 0) {
-    const betChance = cat >= HandCategory.TWO_PAIR ? pers.aggression : cat === HandCategory.PAIR ? pers.aggression * 0.3 : 0;
+    const betChance =
+      cat >= HandCategory.TWO_PAIR ? pers.aggression : cat === HandCategory.PAIR ? pers.aggression * 0.3 : 0;
     if (legal.canRaise && rng.next() < betChance) return raiseTo(legal, pot / 3, bb);
     return { type: 'check' };
   }

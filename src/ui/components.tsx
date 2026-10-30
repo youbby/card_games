@@ -28,7 +28,11 @@ export function Page({
     <div className="mx-auto flex h-full max-w-lg flex-col">
       <header className="safe-top flex shrink-0 items-center gap-2 px-3 pb-2">
         {onBack ? (
-          <button onClick={onBack} className="-ml-1 rounded-full p-1.5 text-gray-300 active:bg-white/10" aria-label="뒤로">
+          <button
+            onClick={onBack}
+            className="-ml-1 rounded-full p-1.5 text-gray-300 active:bg-white/10"
+            aria-label="뒤로"
+          >
             <ChevronLeft className="h-6 w-6" />
           </button>
         ) : (
@@ -175,27 +179,38 @@ const CARD_SIZES = {
   lg: 'h-[78px] w-14 text-base rounded-lg',
 };
 
+/** Inline style that delays a card animation, scaled by the animation speed setting. */
+export const animDelay = (ms: number) => (ms ? { animationDelay: `calc(${ms}ms * var(--anim, 1))` } : undefined);
+
 export function PlayingCard({
   card,
   size = 'md',
   faceDown,
   highlight,
   dim,
+  delay = 0,
+  flip,
 }: {
   card?: Card;
   size?: keyof typeof CARD_SIZES;
   faceDown?: boolean;
   highlight?: boolean;
   dim?: boolean;
+  /** Milliseconds to wait before the card is dealt (for staggered deals). */
+  delay?: number;
+  /** Turn the card over instead of dealing it (a face-down card being revealed). */
+  flip?: boolean;
 }) {
   if (faceDown || card === undefined) {
-    return <div className={cx('card-back deal-in shrink-0', CARD_SIZES[size])} />;
+    return <div className={cx('card-back deal-in shrink-0', CARD_SIZES[size])} style={animDelay(delay)} />;
   }
   const suit = SUIT_SYMBOLS[suitOf(card)];
   return (
     <div
+      style={animDelay(delay)}
       className={cx(
-        'card-face deal-in relative flex shrink-0 flex-col justify-between p-0.5 font-black leading-none',
+        'card-face relative flex shrink-0 flex-col justify-between p-0.5 font-black leading-none',
+        flip ? 'flip-in' : 'deal-in',
         CARD_SIZES[size],
         isRed(card) ? 'text-red-600' : 'text-gray-900',
         highlight && 'outline-2 outline-offset-1 outline-yellow-400',
